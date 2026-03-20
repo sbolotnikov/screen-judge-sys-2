@@ -633,7 +633,7 @@ const Page: React.FC<Props> = () => {
                           </option>
                         ))}
                     </select>
-                    <p className="text-center w-48">Choose Picture for Logo</p>
+                    <p className="text-center w-48">Choose Picture for Logos</p>
                   </div>
                 )}
                 {displayedVideos && displayedVideos.length > 0 && (
