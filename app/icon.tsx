@@ -28,7 +28,7 @@ export default function Icon() {
        
     }}
   >
-      <img width={32} height={32} alt={'Logo'} src={ 'https://screen-handler-app.vercel.app/favicon-32x32.png'}  />
+      <img width={32} height={32} alt={'Logo'} src={ 'https://screen-judge-sys-2.vercel.app/favicon-32x32.png'}  />
   </div>
   
     ),
