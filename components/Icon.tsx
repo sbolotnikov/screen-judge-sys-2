@@ -18,6 +18,7 @@ export type IconName =
   | 'ChevronLeft'
   | 'ArrowRight'
   | 'User'
+  | 'Image'
 
 interface IconProps extends React.SVGProps<SVGSVGElement> {
   name: IconName;
@@ -155,6 +156,14 @@ export function Icon({ name, className, ...props }: IconProps) {
       return (
         <svg {...defaultProps}>
           <path d="m15 18-6-6 6-6" />
+        </svg>
+      );
+    case 'Image':
+      return (
+        <svg {...defaultProps}>
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
         </svg>
       );
     default:
