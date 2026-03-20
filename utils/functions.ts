@@ -1,0 +1,5 @@
+
+const sleep = (n:number)=> {
+    return new Promise((resolve) => setTimeout(resolve, n));
+  }
+  export default sleep;

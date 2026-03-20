@@ -1,0 +1,129 @@
+.navbar {
+  height: 5.5rem;
+  /* background-color: transparent; */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* padding: 1.5rem 1.5rem 0 0; */
+ 
+  z-index: 40;
+}
+
+
+
+
+
+/*
+    This is a single item ( <li> ) in the list
+    */
+.navbar__item {
+  white-space: nowrap;
+  
+}
+
+.navbar__right_span {
+  margin-right: .5rem;
+  height: 3rem;
+  position: absolute;
+  right: 0;
+  top:0rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/*
+  This is the container for all the navbar links ( <ul> )
+  */
+.navbar__list {
+display: flex;
+list-style: none;
+padding: 1.5rem;
+}
+.navbar__item {
+  margin-right: 3.5rem;
+}
+
+/* .navbar__menu {
+  display: none;
+  cursor: pointer;
+  height: 1.5rem;
+  width: 2rem;
+}
+.navbar__menu_grid {
+    margin:0 .25rem 0 .25rem;
+    cursor: pointer;
+    height: 1.5rem;
+    width: 1.5rem;
+  } */
+  .blurFilterNavAlways {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+    
+
+  
+  }
+  .blurFilterNav {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+  
+  }
+  @media (min-width: 768px) {
+    .blurFilterNav {
+      backdrop-filter: none;
+      -webkit-backdrop-filter:none;
+  
+    }
+  }
+
+@media screen and (max-width: 767px) {
+ .navbar{
+  padding: 0 ;
+  z-index: 100;
+ }
+  .navbar__list {
+    display: flex;
+    flex-direction: column;
+    padding: min(10vh, 5rem) 0rem;
+    height: 100svh;
+    right:0;
+    top:0;
+    list-style: none;
+    position: absolute;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+ 
+  /* .navbar__menu {
+    display: block;
+    z-index: 1000;
+  } */
+
+  .navbar__item {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    border-radius: 0 3rem 3rem 0;
+    margin:0.25rem 0;
+    z-index: 100;
+  }
+  .navbar__right_span {
+    margin-right: .5rem;
+    height: 3rem;
+    position: absolute;
+    right: 0;
+    top:0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+}
+@keyframes dashout {
+  0% {
+    transform: rotate(0);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
