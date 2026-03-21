@@ -405,7 +405,7 @@ const Page: React.FC<Props> = () => {
       )}
       {/* {revealCloud && <ChoosePicture onReturn={onReturnPicture} />} */}
 
-      <div className="blurFilter border-0 rounded-md p-2 shadow-2xl w-[95%] max-w-[850px] max-h-[85%] h-[85%]  md:w-full md:mt-8 bg-lightMainBG/70 dark:bg-darkMainBG/70">
+      <div className="blurFilter border-0 rounded-md p-2 shadow-2xl w-[95%] max-w-[850px] max-h-[85%] h-[85%]  md:w-full md:mt-14 bg-lightMainBG/70 dark:bg-darkMainBG/70">
         <div className="w-full h-full flex flex-col justify-center items-center border rounded-md border-lightMainColor dark:border-darkMainColor relative p-2 overflow-auto">
           {/* {session?.user.role == 'Admin' && ( */}
           <div className="absolute top-0 left-0 max-w-fit p-2 flex flex-col justify-start items-center">
