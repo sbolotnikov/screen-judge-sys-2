@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Team, Dance, Judge, EventData } from '@/types/types';
+import { Team, Dance, Judge, EventData, JudgingFormat } from '@/types/types';
 import { Icon } from '@/components/Icon';
 import Image from 'next/image';
 import usePartySettings from '@/hooks/usePartySettings';
+import { BlurInput } from './BlurInput';
 
 /**
  * Settings Page
@@ -17,6 +18,10 @@ export default function SettingsDashboard({
   teams,
   dances,
   judges,
+  scores,
+  finalized,
+  releasedDances,
+  judgingFormat,
 }: {
   partyID: string;
   id: string;
@@ -24,17 +29,169 @@ export default function SettingsDashboard({
   teams: Team[];
   dances: Dance[];
   judges: Judge[];
+  scores: EventData['scores'];
+  finalized?: EventData['finalized'];
+  releasedDances?: EventData['releasedDances'];
+  judgingFormat: JudgingFormat;
 }) {
   const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
   const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
   const [loadingJudges, setLoadingJudges] = useState(false);
-  const { updateEventField, setCompID } = usePartySettings();
+  const { updateEventField, setCompID, updateEvent } = usePartySettings();
 
   useEffect(() => {
     if (partyID) {
       setCompID(partyID);
     }
   }, [partyID, setCompID]);
+
+  const clearAllMarks = async () => {
+    if (confirm('Are you sure you want to clear all marks, finalized status, and released dances for this event? This action cannot be undone.')) {
+      try {
+        if (!id) return;
+        await updateEvent(id, {
+          scores: {},
+          finalized: {},
+          releasedDances: {}
+        });
+      } catch (err) {
+        console.error('Error clearing marks:', err);
+      }
+    }
+  };
+
+  const unfinalizeJudge = async (judgeId: string) => {
+    if (confirm(`Are you sure you want to unfinalize results for this judge? They will be able to edit their marks again.`)) {
+      try {
+        const newFinalized = JSON.parse(JSON.stringify(finalized || {}));
+        // Remove this judge from all dances in finalized object
+        Object.keys(newFinalized).forEach(danceId => {
+          if (newFinalized[danceId][judgeId]) {
+            delete newFinalized[danceId][judgeId];
+          }
+        });
+        await updateEventField(id, 'finalized', newFinalized);
+      } catch (err) {
+        console.error('Error unfinalizing judge:', err);
+      }
+    }
+  };
+
+  const releaseDance = async (danceId: string) => {
+    try {
+      const newReleased = JSON.parse(JSON.stringify(releasedDances || {}));
+      newReleased[danceId] = !newReleased[danceId];
+      await updateEventField(id, 'releasedDances', newReleased);
+    } catch (err) {
+      console.error('Error releasing dance:', err);
+    }
+  };
+
+  const exportResultsToPDF = async () => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      // Dynamically import jspdf and jspdf-autotable to avoid SSR issues
+      const { jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Title
+      doc.setFontSize(22);
+      doc.text(name || 'Competition Results', pageWidth / 2, 20, { align: 'center' });
+
+      // Summary of Results (Leaderboard)
+      doc.setFontSize(18);
+      doc.text('Summary of Results', 14, 35);
+
+      // Calculate scores (logic similar to DisplayCompResults)
+      const teamScores = teams.map((team) => {
+        let total = 0;
+        dances.forEach((dance) => {
+          // ONLY count if dance is released
+          if (!releasedDances?.[dance.id]) return;
+
+          const danceScores = scores[dance.id] || {};
+          const danceFinalized = finalized?.[dance.id] || {};
+
+          judges.forEach((judge) => {
+            // Only count if judge finalized this dance
+            if (danceFinalized[judge.id]) {
+              const score = danceScores[judge.id]?.[team.id];
+              if (judgingFormat === 'Original') {
+                if (score === 'gold') total += 3;
+                else if (score === 'silver') total += 2;
+                else if (score === 'bronze') total += 1;
+              } else if (typeof score === 'number') {
+                total += (teams.length + 1) - score;
+              }
+            }
+          });
+        });
+        return { ...team, score: total };
+      });
+
+      // Sort descending
+      teamScores.sort((a, b) => b.score - a.score);
+
+      // Leaderboard Table
+      autoTable(doc, {
+        startY: 40,
+        head: [['Rank', 'Team Name', 'Total Points']],
+        body: teamScores.map((team, index) => [
+          index + 1,
+          team.name,
+          team.score
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [139, 92, 246] }, // Violet-600
+      });
+
+      // Detailed Marks for Each Dance
+      dances.forEach((dance) => {
+        // ONLY include in PDF if dance is released
+        if (!releasedDances?.[dance.id]) return;
+
+        doc.addPage();
+        doc.setFontSize(18);
+        doc.text(`Marks: ${dance.name}`, 14, 20);
+
+        // Table: Teams as rows, Judges as columns
+        const head = [['Team', ...judges.map(j => j.name)]];
+        const body = teams.map(team => {
+          const row = [team.name];
+          judges.forEach(judge => {
+            const isJudgeFinished = finalized?.[dance.id]?.[judge.id];
+            const mark = scores[dance.id]?.[judge.id]?.[team.id];
+
+            if (!isJudgeFinished || mark === null || mark === undefined) {
+              row.push('-');
+            } else if (typeof mark === 'number') {
+              row.push(mark.toString());
+            } else {
+              row.push(mark.charAt(0).toUpperCase() + mark.slice(1));
+            }
+          });
+          return row;
+        });
+
+        autoTable(doc, {
+          startY: 25,
+          head,
+          body,
+          theme: 'grid',
+          headStyles: { fillColor: [219, 39, 119] }, // Pink-600
+        });
+      });
+
+      doc.save(`${name || 'results'}_results.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alert('Failed to generate PDF. Please try again.');
+    }
+  };
 
   const fetchJudges = async () => {
     setLoadingJudges(true);
@@ -159,13 +316,77 @@ export default function SettingsDashboard({
         <div className="flex items-center space-x-3 mb-4">
           <h2 className="text-2xl font-bold text-stone-900">Event Name</h2>
         </div>
-        <input
-          type="text"
-          value={name || ''}
-          onChange={(e) => handleChange(e.target.value, 'name')}
-          placeholder="Enter Event Name"
-          className="w-full max-w-md rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 text-lg p-3 border transition-colors bg-stone-50 focus:bg-white"
-        />
+        <div className="flex flex-col sm:flex-row gap-6">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">
+              Name
+            </label>
+            <BlurInput
+              value={name || ''}
+              onUpdate={(val) => handleChange(val, 'name')}
+              placeholder="Enter Event Name"
+              className="w-full rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 text-lg p-3 border transition-colors bg-stone-50 focus:bg-white"
+            />
+          </div>
+          <div className="w-full sm:w-64">
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">
+              Judging Format
+            </label>
+            <select
+              value={judgingFormat}
+              onChange={(e) => handleChange(e.target.value as JudgingFormat, 'judgingFormat')}
+              className="w-full rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 text-lg p-3 border transition-colors bg-stone-50"
+            >
+              <option value="Original">Original (Gold, Silver, Bronze)</option>
+              <option value="Final">Final (Ranking 1 to last)</option>
+            </select>
+          </div>
+        </div>
+        </div>
+
+      <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 bg-amber-100 rounded-xl">
+            <Icon name="Gavel" className="h-6 w-6 text-amber-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-stone-900">Judge Results Status</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {judges.length === 0 && (
+            <p className="text-stone-500 italic col-span-full">No judges added yet.</p>
+          )}
+          {judges.map((judge) => (
+            <div key={judge.id} className="flex flex-col p-4 border border-stone-200 rounded-2xl bg-stone-50/50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-3 truncate">
+                  {judge.image ? (
+                    <Image src={judge.image} alt={judge.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-stone-200 flex items-center justify-center">
+                      <Icon name="User" className="h-4 w-4 text-stone-400" />
+                    </div>
+                  )}
+                  <span className="font-bold text-stone-900 truncate">{judge.name}</span>
+                </div>
+                <button
+                  onClick={() => unfinalizeJudge(judge.id)}
+                  className="text-[10px] font-bold uppercase tracking-tighter text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md transition-colors"
+                  title="Allow judge to edit again"
+                >
+                  Unfinalize
+                </button>
+              </div>
+              <div className="flex items-center justify-end">
+                {dances.map(dance => {
+                  const isFinished = finalized?.[dance.id]?.[judge.id];
+                  return (
+                    <div key={dance.id} title={`${dance.name}: ${isFinished ? 'Finalized' : 'Pending'}`} className={`w-3 h-3 rounded-full ml-1.5 ${isFinished ? 'bg-green-500' : 'bg-stone-300'}`}></div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
@@ -192,29 +413,28 @@ export default function SettingsDashboard({
               key={team.id}
               className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl bg-stone-50/50 hover:bg-white transition-colors"
             >
-              <input
-                type="text"
+              <BlurInput
                 value={team.name}
-                onChange={(e) => updateTeam(index, 'name', e.target.value)}
+                onUpdate={(val) => updateTeam(index, 'name', val)}
                 placeholder="Team Name"
-                className="flex-1 rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5 border"
+                className="flex-1 rounded-xl shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5 border border-[#776548] text-[#444]"
               />
               <div className="relative">
                 <input
                   type="color"
                   value={team.color}
                   onChange={(e) => updateTeam(index, 'color', e.target.value)}
-                  className="h-11 w-11 rounded-xl border border-stone-300 p-1 cursor-pointer bg-white"
+                  className="h-11 w-11 rounded-xl border border-[#776548] text-[#444] p-1 cursor-pointer bg-white"
                 />
               </div>
-              <input
+              <BlurInput
                 type="text"
                 value={team.logo}
-                onChange={(e) => updateTeam(index, 'logo', e.target.value)}
+                onUpdate={(val) => updateTeam(index, 'logo', val)}
                 placeholder="Logo URL (optional)"
-                className="flex-1 rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5 border"
+                className="flex-1 rounded-xl border border-[#776548] text-[#444] shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5"
               />
-              <div className="h-12 w-12 rounded-full overflow-hidden bg-stone-200 flex-shrink-0">
+              <div className="h-12 w-12 rounded-full overflow-hidden bg-stone-200 shrink-0">
                 {team.logo ? (
                   <Image
                     src={team.logo}
@@ -265,12 +485,11 @@ export default function SettingsDashboard({
               key={dance.id}
               className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl bg-stone-50/50 hover:bg-white transition-colors"
             >
-              <input
-                type="text"
+              <BlurInput
                 value={dance.name}
-                onChange={(e) => updateDance(index, 'name', e.target.value)}
+                onUpdate={(val) => updateDance(index, 'name', val)}
                 placeholder="Dance Name (e.g., Waltz, Rumba)"
-                className="flex-1 rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5 border"
+                className="flex-1 rounded-xl border border-[#776548] text-[#444] shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5"
               />
               <button
                 onClick={() => deleteDance(index)}
@@ -323,19 +542,18 @@ export default function SettingsDashboard({
                   </div>
                 )}
               </div>
-              <input
-                type="text"
+              <BlurInput
                 value={judge.name}
-                onChange={(e) => updateJudge(index, 'name', e.target.value)}
+                onUpdate={(val) => updateJudge(index, 'name', val)}
                 placeholder="Judge Name"
-                className="flex-1 rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5 border"
+                className="flex-1 rounded-xl border border-[#776548] text-[#444] shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5"
               />
-              <input
+              <BlurInput
                 type="text"
                 value={judge.image}
-                onChange={(e) => updateJudge(index, 'image', e.target.value)}
+                onUpdate={(val) => updateJudge(index, 'image', val)}
                 placeholder="Image URL (optional)"
-                className="flex-1 rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5 border"
+                className="flex-1 rounded-xl border border-[#776548] text-[#444] shadow-sm focus:border-violet-500 focus:ring-violet-500 sm:text-sm p-2.5"
               />
               <button
                 onClick={() => deleteJudge(index)}
@@ -345,6 +563,80 @@ export default function SettingsDashboard({
               </button>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 bg-red-100 rounded-xl">
+            <Icon name="Settings" className="h-6 w-6 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-stone-900">Actions</h2>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <button
+            onClick={exportResultsToPDF}
+            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-full text-white bg-green-600 hover:bg-green-700 shadow-sm transition-colors"
+          >
+            <Icon name="Download" className="mr-2 h-5 w-5" /> Export Released Results to PDF
+          </button>
+          <button
+            onClick={clearAllMarks}
+            className="inline-flex items-center px-6 py-3 border border-red-200 text-base font-medium rounded-full text-red-700 bg-red-50 hover:bg-red-100 shadow-sm transition-colors"
+          >
+            <Icon name="Trash2" className="mr-2 h-5 w-5" /> Clear All Marks
+          </button>
+        </div>
+
+        <div className="mt-8">
+          <h3 className="text-lg font-bold text-stone-900 mb-4 flex items-center">
+            <Icon name="Award" className="mr-2 h-5 w-5 text-violet-600" /> Release Dance Results
+          </h3>
+          <div className="grid grid-cols-1 gap-3">
+            {dances.length === 0 && (
+              <p className="text-stone-500 italic">No dances added yet.</p>
+            )}
+            {dances.map((dance) => {
+              const allFinished = judges.length > 0 && judges.every(j => finalized?.[dance.id]?.[j.id]);
+              const isReleased = releasedDances?.[dance.id];
+              
+              return (
+                <div key={dance.id} className="flex items-center justify-between p-4 border border-stone-200 rounded-2xl bg-stone-50/30">
+                  <div className="flex items-center space-x-3">
+                    <span className="font-bold text-stone-900">{dance.name}</span>
+                    {!allFinished && (
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                        Waiting for Judges
+                      </span>
+                    )}
+                    {allFinished && !isReleased && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                        Ready to Release
+                      </span>
+                    )}
+                    {isReleased && (
+                      <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">
+                        Released to Screen
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    disabled={!allFinished && !isReleased}
+                    onClick={() => releaseDance(dance.id)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${
+                      isReleased 
+                        ? 'bg-violet-600 text-white hover:bg-violet-700' 
+                        : allFinished 
+                          ? 'bg-white border-2 border-green-600 text-green-600 hover:bg-green-50' 
+                          : 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {isReleased ? 'Unrelease' : 'Release Results'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

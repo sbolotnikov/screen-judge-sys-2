@@ -892,7 +892,7 @@ const Page: React.FC<Props> = () => {
                           onChange={(e) =>
                             handleChange(e.target.value, 'eventID')
                           }
-                          className="w-28 h-9 bg-white rounded-lg border border-[#776548] text-[#444] text-left"
+                          className="w-32 h-9 bg-white rounded-lg border border-[#776548] text-[#444] text-left"
                         >
                           {events.map((option) => (
                             <option key={option.id} value={option.id}>
@@ -901,14 +901,14 @@ const Page: React.FC<Props> = () => {
                           ))}
                         </select>
                       )}
-                      <p className="text-center w-20">Choose Dance to show results for</p>
+                      <p className="text-center w-32">Choose Event to show results</p>
                     </div>
                     {eventID.length>0 && (
                        <div className="flex flex-col m-1">                  
                       <select
               value={selectedDanceId}
               onChange={(e) =>handleChange(e.target.value, 'selectedDanceId')}
-              className="block w-32 pl-4 pr-10 py-3 text-base border-stone-300 focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm rounded-xl border bg-stone-50 font-medium"
+              className="block w-32 h-9 bg-white rounded-lg border border-[#776548] text-[#444] focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm font-medium"
             >
               <option value="all">Overall (All Dances)</option>
               {events.filter(event => event.id === eventID)[0].dances.map((dance) => (
@@ -917,7 +917,7 @@ const Page: React.FC<Props> = () => {
                 </option>
               ))}
             </select>
-             <p className="text-center w-20">Choose dance to display</p>
+             <p className="text-center w-32">Choose dance to display</p>
 </div>
                     )}
                     {eventID.length>0 && (
@@ -925,7 +925,7 @@ const Page: React.FC<Props> = () => {
                       <select
               value={selectedDanceIdJudge}
               onChange={(e) =>handleChange(e.target.value, 'selectedDanceIdJudge')}
-              className="block w-32 pl-4 pr-10 py-3 text-base border-stone-300 focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm rounded-xl border bg-stone-50 font-medium"
+              className="block w-32 h-9 bg-white rounded-lg border border-[#776548] text-[#444] focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm font-medium"
             >
               <option value="all">Overall (All Dances)</option>
               {events.filter(event => event.id === eventID)[0].dances.map((dance) => (
@@ -934,7 +934,7 @@ const Page: React.FC<Props> = () => {
                 </option>
               ))}
             </select>
-             <p className="text-center w-20">Choose dance to judge</p>
+             <p className="text-center w-32">Choose dance to judge</p>
 </div>
                     )}
                     {/* <div className="flex flex-col justify-center items-center">

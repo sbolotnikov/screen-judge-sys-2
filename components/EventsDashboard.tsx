@@ -12,7 +12,7 @@ type SessionUser = {
 };
 import { Icon } from '@/components/Icon';
 import SettingsDashboard from './SettingDashboard';
-import { Team, Dance, Judge, ScoreValue } from '@/types/types';
+import { Team, Dance, Judge, ScoreValue, JudgingFormat } from '@/types/types';
 import ScoringPage from './ScoringModal';
 import DisplayCompResults from './DisplayCompResults';
 import usePartySettings from '@/hooks/usePartySettings';
@@ -34,6 +34,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newEventName, setNewEventName] = useState('');
+  const [newJudgingFormat, setNewJudgingFormat] = useState<JudgingFormat>('Original');
   const [eventID, setEventID] = useState<string | null>(null);
   const [eventToDelete, setEventToDelete] = useState<string | null>(null);
 
@@ -45,6 +46,10 @@ export default function EventsDashboard({ id }: { id?: string }) {
   const eventName: string = selectedEvent?.name || '';
   const scores: Record<string, Record<string, Record<string, ScoreValue>>> =
     selectedEvent?.scores || {};
+  const finalized: Record<string, Record<string, boolean>> =
+    selectedEvent?.finalized || {};
+  const releasedDances: Record<string, boolean> =
+    selectedEvent?.releasedDances || {};
 
   /**
    * Handles the creation of a new event in the events array.
@@ -59,10 +64,12 @@ export default function EventsDashboard({ id }: { id?: string }) {
         teams: [],
         dances: [],
         judges: [],
+        judgingFormat: newJudgingFormat,
         scores: {},
       });
       setIsCreateModalOpen(false);
       setNewEventName('');
+      setNewJudgingFormat('Original');
     } catch (err) {
       console.error('Error creating event:', err);
     }
@@ -276,6 +283,10 @@ events.filter((event) => event.judges.some((judge) => judge.id === user?.id)  ).
             teams={teams}
             dances={dances}
             judges={judges}
+            scores={scores}
+            finalized={finalized}
+            releasedDances={releasedDances}
+            judgingFormat={selectedEvent?.judgingFormat || 'Original'}
           />
           <DisplayCompResults
             name={eventName}
@@ -284,6 +295,9 @@ events.filter((event) => event.judges.some((judge) => judge.id === user?.id)  ).
             dances={dances}
             judges={judges}
             selectedDanceId={selectedDanceId!}
+            judgingFormat={selectedEvent?.judgingFormat || 'Original'}
+            releasedDances={releasedDances}
+            finalized={finalized}
           />
         </div>
       )}
@@ -296,7 +310,10 @@ events.filter((event) => event.judges.some((judge) => judge.id === user?.id)  ).
             teams={teams}
             dances={dances}
             selectedDanceId={selectedDanceIdJudge!}
-            judges={judges.filter((judge) => judge.id === user.id)}
+            judges={judges}
+            currentJudgeId={user.id}
+            judgingFormat={selectedEvent?.judgingFormat || 'Original'}
+            finalized={finalized}
           />
         </div>
       )}
@@ -333,6 +350,23 @@ events.filter((event) => event.judges.some((judge) => judge.id === user?.id)  ).
                   placeholder="e.g., Spring Dance Competition"
                   required
                 />
+              </div>
+              <div className="mb-6">
+                <label
+                  htmlFor="judgingFormat"
+                  className="block text-sm font-semibold text-stone-700 mb-2"
+                >
+                  Judging Format
+                </label>
+                <select
+                  id="judgingFormat"
+                  value={newJudgingFormat}
+                  onChange={(e) => setNewJudgingFormat(e.target.value as JudgingFormat)}
+                  className="w-full rounded-xl border-stone-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 text-lg p-3 border transition-colors bg-white"
+                >
+                  <option value="Original">Original (Gold, Silver, Bronze)</option>
+                  <option value="Final">Final (Ranking 1 to last)</option>
+                </select>
               </div>
               <div className="flex justify-end space-x-3">
                 <button

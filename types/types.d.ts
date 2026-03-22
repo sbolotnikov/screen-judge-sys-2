@@ -29,7 +29,9 @@ export type Judge = {
   image: string;
 }
 
-export type ScoreValue = 'gold' | 'silver' | 'bronze' | null;
+export type ScoreValue = 'gold' | 'silver' | 'bronze' | number | null;
+
+export type JudgingFormat = 'Original' | 'Final';
 
 export type EventData = {
   id: string;
@@ -38,6 +40,11 @@ export type EventData = {
   teams: Team[];
   dances: Dance[];
   judges: Judge[];
+  judgingFormat?: JudgingFormat;
   // scores structure: { [danceId]: { [judgeId]: { [teamId]: ScoreValue } } }
   scores: Record<string, Record<string, Record<string, ScoreValue>>>;
+  // finalized structure: { [danceId]: { [judgeId]: boolean } }
+  finalized?: Record<string, Record<string, boolean>>;
+  // releasedDances structure: { [danceId]: boolean }
+  releasedDances?: Record<string, boolean>;
 }

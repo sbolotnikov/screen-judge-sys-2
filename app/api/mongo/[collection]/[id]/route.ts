@@ -20,6 +20,10 @@ export async function GET(
 
     const document = await collection.findOne(query);
 
+    if (!document) {
+      return NextResponse.json({ document: null }, { status: 200 });
+    }
+
     return NextResponse.json({ document });
   } catch (e: unknown) {
     const error = e as Error;

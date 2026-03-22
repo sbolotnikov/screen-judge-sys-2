@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Dance, EventData, Judge, Team } from '@/types/types';
+import { Dance, EventData, Judge, Team, JudgingFormat } from '@/types/types';
 import { motion, useAnimation } from 'framer-motion';
 import { Icon } from '@/components/Icon';
 import Image from 'next/image';
@@ -17,7 +17,10 @@ export default function DisplayCompResults({
   teams,
   dances,
   judges,
-  selectedDanceId
+  selectedDanceId,
+  judgingFormat = 'Original',
+  finalized = {},
+  releasedDances = {}
 }: {
   name: string;
   scores: EventData['scores'];
@@ -25,10 +28,15 @@ export default function DisplayCompResults({
   dances: Dance[];
   judges: Judge[];
   selectedDanceId: string;
+  judgingFormat?: JudgingFormat;
+  finalized?: EventData['finalized'];
+  releasedDances?: EventData['releasedDances'];
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-
+  console.log('Scores:', scores);
+  console.log('Finalized:', finalized);
+  console.log('Released Dances:', releasedDances);
   useEffect(() => {
     let animationFrameId: number;
     let startTime: number | null = null;
@@ -76,31 +84,40 @@ export default function DisplayCompResults({
    * Memoized to prevent unnecessary recalculations.
    */
   const teamScores = useMemo(() => {
-    if (teams.length === 0) return [];
+    if (teams.length === 0 || judges.length === 0) return [];
 
     const results = teams.map((team) => {
       let total = 0;
 
-      if (selectedDanceId === 'all') {
-        // Sum across all dances
-        dances.forEach((dance) => {
-          const danceScores = scores[dance.id] || {};
-          judges.forEach((judge) => {
+      const calcTeamScore = (danceId: string) => {
+        // ONLY count if dance is released
+        if (!releasedDances[danceId]) return 0;
+
+        const danceScores = scores[danceId] || {};
+        const danceFinalized = finalized?.[danceId] || {};
+        let teamTotal = 0;
+        judges.forEach((judge) => {
+          // Only count if judge finalized this dance
+          if (danceFinalized[judge.id]) {
             const score = danceScores[judge.id]?.[team.id];
-            if (score === 'gold') total += 3;
-            else if (score === 'silver') total += 2;
-            else if (score === 'bronze') total += 1;
-          });
+            if (judgingFormat === 'Original') {
+              if (score === 'gold') teamTotal += 3;
+              else if (score === 'silver') teamTotal += 2;
+              else if (score === 'bronze') teamTotal += 1;
+            } else if (typeof score === 'number') {
+              teamTotal += (teams.length + 1) - score;
+            }
+          }
+        });
+        return teamTotal;
+      };
+
+      if (selectedDanceId === 'all') {
+        dances.forEach((dance) => {
+          total += calcTeamScore(dance.id);
         });
       } else {
-        // Sum for specific dance
-        const danceScores = scores[selectedDanceId] || {};
-        judges.forEach((judge) => {
-          const score = danceScores[judge.id]?.[team.id];
-          if (score === 'gold') total += 3;
-          else if (score === 'silver') total += 2;
-          else if (score === 'bronze') total += 1;
-        });
+        total += calcTeamScore(selectedDanceId);
       }
 
       return { ...team, score: total };
@@ -108,6 +125,13 @@ export default function DisplayCompResults({
 
     // Sort descending by score
     results.sort((a, b) => b.score - a.score);
+
+    // Only return results if there is actual released data for the current selection
+    const hasReleasedData = selectedDanceId === 'all' 
+      ? Object.values(releasedDances).some(v => v === true)
+      : releasedDances[selectedDanceId] === true;
+
+    if (!hasReleasedData) return [];
 
     // Assign medals based on rank
     // Top 3: Gold, Next 3: Silver, Rest: Bronze
@@ -118,7 +142,7 @@ export default function DisplayCompResults({
 
       return { ...team, medal, rank: index + 1 };
     });
-  }, [selectedDanceId, teams, dances, judges, scores]);
+  }, [selectedDanceId, teams, dances, judges, scores, judgingFormat, finalized, releasedDances]);
 
   if (dances.length === 0) {
     return (
@@ -129,6 +153,20 @@ export default function DisplayCompResults({
         <h3 className="text-xl font-bold text-stone-900">No Dances</h3>
         <p className="mt-2 text-stone-500 max-w-sm mx-auto">
           Add dances in the Settings page to see summaries.
+        </p>
+      </div>
+    );
+  }
+
+  if (teamScores.length === 0) {
+    return (
+      <div className="text-center py-20 bg-white rounded-3xl shadow-sm border border-stone-200">
+        <div className="mx-auto w-20 h-20 bg-stone-50 rounded-full flex items-center justify-center mb-4">
+          <Icon name="Activity" className="h-10 w-10 text-amber-500 animate-pulse" />
+        </div>
+        <h3 className="text-xl font-bold text-stone-900">Results Pending</h3>
+        <p className="mt-2 text-stone-500 max-w-sm mx-auto">
+          Waiting for all judges to finalize their results for this selection.
         </p>
       </div>
     );

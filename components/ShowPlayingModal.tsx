@@ -559,6 +559,9 @@ const ShowPlayingModal: React.FC<Props> = ({
               dances={events.filter((event) => event.id === eventID)[0].dances}
               judges={events.filter((event) => event.id === eventID)[0].judges}
               selectedDanceId={selectedDanceId}
+              judgingFormat={events.filter((event) => event.id === eventID)[0].judgingFormat || 'Original'}
+              releasedDances={events.filter((event) => event.id === eventID)[0].releasedDances || {}}
+              finalized={events.filter((event) => event.id === eventID)[0].finalized || {}}
             />
           )}
           {mode === 'Auto' && (
