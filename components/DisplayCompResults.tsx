@@ -105,6 +105,10 @@ export default function DisplayCompResults({
               else if (score === 'silver') teamTotal += 2;
               else if (score === 'bronze') teamTotal += 1;
             } else if (typeof score === 'number') {
+              // In Final (Ranking) format, LOWER score (rank) is BETTER.
+              // To make it work with descending sort by 'total', we invert it.
+              // Use (teams.length + 1) - rank. 
+              // Example: 1st place in 10 teams = 11 - 1 = 10 points. 10th place = 11 - 10 = 1 point.
               teamTotal += (teams.length + 1) - score;
             }
           }
@@ -133,14 +137,19 @@ export default function DisplayCompResults({
 
     if (!hasReleasedData) return [];
 
-    // Assign medals based on rank
-    // Top 3: Gold, Next 3: Silver, Rest: Bronze
+    // Assign ranks and medals
+    let currentRank = 1;
     return results.map((team, index) => {
-      let medal: 'gold' | 'silver' | 'bronze' = 'bronze';
-      if (index < 3) medal = 'gold';
-      else if (index < 6) medal = 'silver';
+      // Handle ties for rank
+      if (index > 0 && team.score < results[index - 1].score) {
+        currentRank = index + 1;
+      }
 
-      return { ...team, medal, rank: index + 1 };
+      let medal: 'gold' | 'silver' | 'bronze' = 'bronze';
+      if (currentRank <= 3) medal = 'gold';
+      else if (currentRank <= 6) medal = 'silver';
+
+      return { ...team, medal, rank: currentRank };
     });
   }, [selectedDanceId, teams, dances, judges, scores, judgingFormat, finalized, releasedDances]);
 

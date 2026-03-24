@@ -48,3 +48,4 @@ export type EventData = {
   // releasedDances structure: { [danceId]: boolean }
   releasedDances?: Record<string, boolean>;
 }
+
