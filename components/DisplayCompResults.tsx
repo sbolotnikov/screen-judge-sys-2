@@ -25,6 +25,58 @@ export default function DisplayCompResults(props: {
   return <OriginalResults {...props} />;
 }
 
+function useAutoScroll(containerRef: React.RefObject<HTMLDivElement | null>, contentRef: React.RefObject<HTMLDivElement | null>, dependency: any) {
+  useEffect(() => {
+    let animationFrameId: number;
+    let startTime: number | null = null;
+    let direction = 1; // 1 for down, -1 for up
+    const scrollSpeed = 0.03; // pixels per millisecond - slower for readability
+
+    const scroll = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const deltaTime = timestamp - startTime;
+
+      if (containerRef.current && contentRef.current) {
+        const containerHeight = containerRef.current.clientHeight;
+        const contentHeight = contentRef.current.scrollHeight;
+        const maxScroll = contentHeight - containerHeight;
+
+        if (maxScroll > 0) {
+          let currentScroll = containerRef.current.scrollTop;
+          currentScroll += direction * scrollSpeed * 16; // use ~16ms as base frame time
+          
+          if (currentScroll >= maxScroll) {
+            currentScroll = maxScroll;
+            direction = -1;
+            startTime = timestamp + 2000; // Pause at bottom
+          } else if (currentScroll <= 0) {
+            currentScroll = 0;
+            direction = 1;
+            startTime = timestamp + 2000; // Pause at top
+          }
+
+          if (timestamp > (startTime || 0)) {
+            containerRef.current.scrollTop = currentScroll;
+          }
+        }
+      }
+      
+      startTime = timestamp;
+      animationFrameId = requestAnimationFrame(scroll);
+    };
+
+    // Delay start slightly to allow for layout to settle
+    const timeoutId = setTimeout(() => {
+        animationFrameId = requestAnimationFrame(scroll);
+    }, 1000);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      clearTimeout(timeoutId);
+    };
+  }, [dependency, containerRef, contentRef]);
+}
+
 function FinalResultsSkating({
   name,
   scores,
@@ -136,6 +188,8 @@ function FinalResultsSkating({
         finalResults 
     };
   }, [teams, judges, dances, scores, finalized, releasedDances, selectedDanceId]);
+
+  useAutoScroll(scrollContainerRef, contentRef, teamScores.length);
 
   if (dances.length === 0 || teamScores.length === 0) {
     return <PendingResults />;
@@ -268,6 +322,8 @@ function OriginalResults({
       return { ...team, medal, rank: currentRank };
     });
   }, [selectedDanceId, teams, dances, judges, scores, finalized, releasedDances]);
+
+  useAutoScroll(scrollContainerRef, contentRef, teamScores.length);
 
   if (teamScores.length === 0) {
     return <PendingResults />;
