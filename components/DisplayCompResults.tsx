@@ -1,13 +1,14 @@
 "use client";
-
+ 
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { animate } from 'framer-motion';
 import { Dance, EventData, Judge, Team, JudgingFormat, Placement, FinalResult, Rankings } from '@/types/types';
 import { motion } from 'framer-motion';
 import { Icon } from '@/components/Icon';
 import Image from 'next/image';
 import { calculateDancePlacements, calculateFinalResults } from '@/services/skatingSystem';
 import SkatingBreakdown from './SkatingBreakdown';
-
+ 
 export default function DisplayCompResults(props: {
   name: string;
   scores: EventData['scores'];
@@ -24,59 +25,71 @@ export default function DisplayCompResults(props: {
   }
   return <OriginalResults {...props} />;
 }
-
-function useAutoScroll(containerRef: React.RefObject<HTMLDivElement | null>, contentRef: React.RefObject<HTMLDivElement | null>, dependency: any) {
+ 
+function useAutoScroll(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  contentRef: React.RefObject<HTMLDivElement | null>,
+  dependency: any
+) {
   useEffect(() => {
-    let animationFrameId: number;
-    let startTime: number | null = null;
-    let direction = 1; // 1 for down, -1 for up
-    const scrollSpeed = 0.03; // pixels per millisecond - slower for readability
-
-    const scroll = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const deltaTime = timestamp - startTime;
-
-      if (containerRef.current && contentRef.current) {
-        const containerHeight = containerRef.current.clientHeight;
-        const contentHeight = contentRef.current.scrollHeight;
-        const maxScroll = contentHeight - containerHeight;
-
-        if (maxScroll > 0) {
-          let currentScroll = containerRef.current.scrollTop;
-          currentScroll += direction * scrollSpeed * 16; // use ~16ms as base frame time
-          
-          if (currentScroll >= maxScroll) {
-            currentScroll = maxScroll;
-            direction = -1;
-            startTime = timestamp + 2000; // Pause at bottom
-          } else if (currentScroll <= 0) {
-            currentScroll = 0;
-            direction = 1;
-            startTime = timestamp + 2000; // Pause at top
-          }
-
-          if (timestamp > (startTime || 0)) {
-            containerRef.current.scrollTop = currentScroll;
-          }
-        }
+    let stopped = false;
+    let currentAnimation: { stop: () => void } | null = null;
+ 
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms));
+ 
+    const run = async () => {
+      await sleep(1000); // initial settle delay
+      if (stopped) return;
+ 
+      const container = containerRef.current;
+      const content = contentRef.current;
+      if (!container || !content) return;
+ 
+      while (!stopped) {
+        const maxScroll = content.scrollHeight - container.clientHeight;
+        if (maxScroll <= 0) break;
+ 
+        // px/s — tune this number for faster/slower scroll
+        const speed = 60;
+        const duration = maxScroll / speed;
+ 
+        // Scroll down
+        await new Promise<void>((resolve) => {
+          currentAnimation = animate(container.scrollTop, maxScroll, {
+            duration,
+            ease: 'linear',
+            onUpdate: (v) => { if (container) container.scrollTop = v; },
+            onComplete: resolve,
+          });
+        });
+        if (stopped) break;
+        await sleep(2000); // pause at bottom
+        if (stopped) break;
+ 
+        // Scroll back up
+        await new Promise<void>((resolve) => {
+          currentAnimation = animate(maxScroll, 0, {
+            duration,
+            ease: 'linear',
+            onUpdate: (v) => { if (container) container.scrollTop = v; },
+            onComplete: resolve,
+          });
+        });
+        if (stopped) break;
+        await sleep(2000); // pause at top
       }
-      
-      startTime = timestamp;
-      animationFrameId = requestAnimationFrame(scroll);
     };
-
-    // Delay start slightly to allow for layout to settle
-    const timeoutId = setTimeout(() => {
-        animationFrameId = requestAnimationFrame(scroll);
-    }, 1000);
-
+ 
+    run();
+ 
     return () => {
-      cancelAnimationFrame(animationFrameId);
-      clearTimeout(timeoutId);
+      stopped = true;
+      currentAnimation?.stop();
     };
   }, [dependency, containerRef, contentRef]);
 }
-
+ 
 function FinalResultsSkating({
   name,
   scores,
@@ -98,11 +111,10 @@ function FinalResultsSkating({
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-
+ 
   const { teamScores, danceResults, finalResults } = useMemo(() => {
     if (teams.length === 0 || judges.length === 0) return { teamScores: [], danceResults: {}, finalResults: [] };
-
-    // 1. Calculate placements for each dance
+ 
     const allDanceResults: Record<string, Placement[]> = {};
     dances.forEach(dance => {
       if (!releasedDances[dance.id]) return;
@@ -110,11 +122,9 @@ function FinalResultsSkating({
       const danceScores = scores[dance.id] || {};
       const danceFinalized = finalized[dance.id] || {};
       
-      // We only calculate if ALL judges have finalized this dance
       const isAllFinalized = judges.every(j => danceFinalized[j.id]);
       if (!isAllFinalized) return;
-
-      // Extract raw rankings for this dance (Judge ID -> Team ID -> Rank)
+ 
       const rankingsForDance: Record<string, Record<string, number>> = {};
       judges.forEach(j => {
         rankingsForDance[j.id] = {};
@@ -123,11 +133,10 @@ function FinalResultsSkating({
           rankingsForDance[j.id][t.id] = typeof val === 'number' ? val : teams.length + 1;
         });
       });
-
+ 
       allDanceResults[dance.id] = calculateDancePlacements(rankingsForDance, teams, judges.length);
     });
-
-    // 2. Calculate final results using Skating System (Rule 10, 11, etc.)
+ 
     const rawRankings: Rankings = {};
     dances.forEach(d => {
       rawRankings[d.id] = {};
@@ -139,7 +148,7 @@ function FinalResultsSkating({
         });
       });
     });
-
+ 
     const finalResults = calculateFinalResults(
       allDanceResults,
       teams,
@@ -147,15 +156,14 @@ function FinalResultsSkating({
       rawRankings,
       judges.map(j => j.id)
     );
-
-    // 3. Adapt for the UI leaderboard and track
+ 
     let processedResults;
     if (selectedDanceId === 'all') {
       processedResults = finalResults.map(fr => {
         const team = teams.find(t => t.id === fr.coupleId)!;
         return {
           ...team,
-          score: fr.totalScore, // Total sum of places
+          score: fr.totalScore,
           rank: fr.finalRank,
           isTie: !Number.isInteger(fr.finalRank)
         };
@@ -166,14 +174,13 @@ function FinalResultsSkating({
         const team = teams.find(t => t.id === dr.coupleId)!;
         return {
           ...team,
-          score: dr.rank, // Use rank as "score" for the horse track
+          score: dr.rank,
           rank: dr.rank,
           isTie: dr.isTie
         };
       });
     }
-
-    // Assign medals based on rank
+ 
     const resultsWithMedals = processedResults.map(res => {
         let medal: 'gold' | 'silver' | 'bronze' = 'bronze';
         const rank = Math.floor(res.rank);
@@ -181,26 +188,24 @@ function FinalResultsSkating({
         else if (rank <= 6) medal = 'silver';
         return { ...res, medal };
     });
-
+ 
     return { 
         teamScores: resultsWithMedals.sort((a,b) => a.rank - b.rank), 
         danceResults: allDanceResults, 
         finalResults 
     };
   }, [teams, judges, dances, scores, finalized, releasedDances, selectedDanceId]);
-
+ 
   useAutoScroll(scrollContainerRef, contentRef, teamScores.length);
-
+ 
   if (dances.length === 0 || teamScores.length === 0) {
     return <PendingResults />;
   }
-
-  // For the horse track in Skating system, LOWER rank is BETTER.
-  // We need to invert it for the visualization so 1st place is at the front.
+ 
   const maxRank = teams.length + 1;
   
   return (
-    <div ref={scrollContainerRef} className="w-full h-full overflow-y-auto scrollbar-hide p-2">
+    <div ref={scrollContainerRef} className="w-full h-screen overflow-y-auto scrollbar-hide p-2">
       <div ref={contentRef} className="space-y-8 pb-10">
         <ResultsHeader name={name} selectedDanceName={dances.find(d => d.id === selectedDanceId)?.name || 'Overall Standings'} />
         
@@ -209,9 +214,7 @@ function FinalResultsSkating({
                 <FinishLine />
                 <div className="space-y-8 relative z-10">
                 {teamScores.map((team) => {
-                    // Invert rank for percentage: 1st place -> ~90%, Last place -> ~10%
                     const percentage = ((maxRank - team.rank) / maxRank) * 88;
-
                     return (
                     <div key={team.id} className="relative h-16 flex items-center">
                         <div className="absolute left-0 right-0 h-1.5 bg-stone-200 rounded-full top-1/2 -translate-y-1/2"></div>
@@ -232,7 +235,7 @@ function FinalResultsSkating({
                 </div>
             </div>
         </div>
-
+ 
         <LeaderboardTable teamScores={teamScores} scoreLabel={selectedDanceId === 'all' ? "Sum of Places" : "Rank"} />
         
         <SkatingBreakdown 
@@ -250,7 +253,7 @@ function FinalResultsSkating({
     </div>
   );
 }
-
+ 
 function OriginalResults({
   name,
   scores,
@@ -272,10 +275,10 @@ function OriginalResults({
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-
+ 
   const teamScores = useMemo(() => {
     if (teams.length === 0 || judges.length === 0) return [];
-
+ 
     const results = teams.map((team) => {
       let total = 0;
       const calcTeamScore = (danceId: string) => {
@@ -293,7 +296,7 @@ function OriginalResults({
         });
         return teamTotal;
       };
-
+ 
       if (selectedDanceId === 'all') {
         dances.forEach((dance) => {
           total += calcTeamScore(dance.id);
@@ -303,14 +306,14 @@ function OriginalResults({
       }
       return { ...team, score: total };
     });
-
+ 
     results.sort((a, b) => b.score - a.score);
     const hasReleasedData = selectedDanceId === 'all' 
       ? Object.values(releasedDances).some(v => v === true)
       : releasedDances[selectedDanceId] === true;
-
+ 
     if (!hasReleasedData) return [];
-
+ 
     let currentRank = 1;
     return results.map((team, index) => {
       if (index > 0 && team.score < results[index - 1].score) {
@@ -322,17 +325,17 @@ function OriginalResults({
       return { ...team, medal, rank: currentRank };
     });
   }, [selectedDanceId, teams, dances, judges, scores, finalized, releasedDances]);
-
+ 
   useAutoScroll(scrollContainerRef, contentRef, teamScores.length);
-
+ 
   if (teamScores.length === 0) {
     return <PendingResults />;
   }
-
+ 
   const maxActualScore = Math.max(...teamScores.map((t) => t.score), 1);
-
+ 
   return (
-    <div ref={scrollContainerRef} className="w-full h-full overflow-y-auto scrollbar-hide p-2">
+    <div ref={scrollContainerRef} className="w-full h-screen overflow-y-auto scrollbar-hide p-2">
       <div ref={contentRef} className="space-y-8 pb-10">
         <ResultsHeader name={name} selectedDanceName={dances.find(d => d.id === selectedDanceId)?.name || 'Overall Standings'} />
         <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
@@ -366,7 +369,7 @@ function OriginalResults({
     </div>
   );
 }
-
+ 
 // SHARED SUB-COMPONENTS
 function ResultsHeader({ name, selectedDanceName }: { name: string, selectedDanceName: string }) {
   return (
@@ -381,7 +384,7 @@ function ResultsHeader({ name, selectedDanceName }: { name: string, selectedDanc
     </div>
   );
 }
-
+ 
 function FinishLine() {
   return (
     <div className="absolute right-10 top-0 bottom-0 w-3 bg-red-500 z-0 flex flex-col items-center justify-center opacity-40">
@@ -389,7 +392,7 @@ function FinishLine() {
     </div>
   );
 }
-
+ 
 function TeamAvatar({ team, displayValue }: { team: any, displayValue: string }) {
   return (
     <div className="relative h-14 w-14 rounded-full border-4 shadow-lg flex items-center justify-center bg-white z-10" style={{ borderColor: team.color }}>
@@ -405,7 +408,7 @@ function TeamAvatar({ team, displayValue }: { team: any, displayValue: string })
     </div>
   );
 }
-
+ 
 function LeaderboardTable({ teamScores, scoreLabel }: { teamScores: any[], scoreLabel: string }) {
   return (
     <div className="bg-white shadow-sm overflow-hidden sm:rounded-3xl border border-stone-200/60">
@@ -438,7 +441,7 @@ function LeaderboardTable({ teamScores, scoreLabel }: { teamScores: any[], score
     </div>
   );
 }
-
+ 
 function PendingResults() {
   return (
     <div className="text-center py-20 bg-white rounded-3xl shadow-sm border border-stone-200">
@@ -450,8 +453,9 @@ function PendingResults() {
     </div>
   );
 }
-
+ 
 function formatRank(rank: number) {
     if (Number.isInteger(rank)) return rank.toString();
     return rank.toFixed(2).replace(/\.?0+$/, "");
 }
+ 
