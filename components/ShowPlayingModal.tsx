@@ -562,6 +562,7 @@ const ShowPlayingModal: React.FC<Props> = ({
               judgingFormat={events.filter((event) => event.id === eventID)[0].judgingFormat || 'Original'}
               releasedDances={events.filter((event) => event.id === eventID)[0].releasedDances || {}}
               finalized={events.filter((event) => event.id === eventID)[0].finalized || {}}
+              isAnimationOn={true}
             />
           )}
           {mode === 'Auto' && (

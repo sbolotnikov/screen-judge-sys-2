@@ -377,13 +377,13 @@ export default function SettingsDashboard({
             onClick={() => setIsTeamsOpen(false)}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
-            <Icon name="X" className="mr-2 h-4 w-4" /> Close
+            <Icon name="EyeOff" className="mr-2 h-4 w-4" /> Close
           </button>
           </div>):(<button
             onClick={() => setIsTeamsOpen(true)}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
-            <Icon name="Activity" className="mr-2 h-4 w-4" /> Manage Teams
+            <Icon name={ 'Eye'} className="h-6 w-6"/> Manage Teams
           </button>)}
         </div>
         <div className="space-y-4">
@@ -463,13 +463,13 @@ export default function SettingsDashboard({
             onClick={() => setIsDancesOpen(false)}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
-            <Icon name="X" className="mr-2 h-4 w-4" /> Close
+            <Icon name="EyeOff" className="mr-2 h-4 w-4" /> Close
           </button>
           </div>):(<button
             onClick={() => setIsDancesOpen(true)}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
-            <Icon name="Activity" className="mr-2 h-4 w-4" /> Manage Dances
+             <Icon name={ 'Eye'} className="h-6 w-6"/> Manage Dances
           </button>)}
 
 
@@ -522,13 +522,13 @@ export default function SettingsDashboard({
             onClick={() => setIsJudgesOpen(false)}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
-            <Icon name="X" className="mr-2 h-4 w-4" /> Close
+            <Icon name="EyeOff" className="mr-2 h-4 w-4" /> Close
           </button>
           </div>):(<button
             onClick={() => setIsJudgesOpen(true)}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
-            <Icon name="Activity" className="mr-2 h-4 w-4" /> Manage Judges
+             <Icon name={ 'Eye'} className="h-6 w-6"/> Manage Judges
           </button>)}
 
 

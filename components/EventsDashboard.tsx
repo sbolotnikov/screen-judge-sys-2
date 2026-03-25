@@ -349,6 +349,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
             judgingFormat={selectedEvent?.judgingFormat || 'Original'}
             releasedDances={releasedDances}
             finalized={finalized}
+            isAnimationOn={false}
           />
         </div>
       )}

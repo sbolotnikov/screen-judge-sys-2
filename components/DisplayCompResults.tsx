@@ -19,6 +19,7 @@ export default function DisplayCompResults(props: {
   judgingFormat?: JudgingFormat;
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
+  isAnimationOn?:boolean;
 }) {
   if (props.judgingFormat === 'Final') {
     return <FinalResultsSkating {...props} />;
@@ -29,10 +30,12 @@ export default function DisplayCompResults(props: {
 function useAutoScroll(
   containerRef: React.RefObject<HTMLDivElement | null>,
   contentRef: React.RefObject<HTMLDivElement | null>,
+    isAnimationOn: boolean = true,
   dependency: any
 ) {
   useEffect(() => {
     let stopped = false;
+    if (!isAnimationOn) return;
     let currentAnimation: { stop: () => void } | null = null;
  
     const sleep = (ms: number) =>
@@ -98,7 +101,8 @@ function FinalResultsSkating({
   judges,
   selectedDanceId,
   finalized = {},
-  releasedDances = {}
+  releasedDances = {},
+  isAnimationOn = true
 }: {
   name: string;
   scores: EventData['scores'];
@@ -108,6 +112,7 @@ function FinalResultsSkating({
   selectedDanceId: string;
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
+  isAnimationOn?: boolean;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -196,7 +201,7 @@ function FinalResultsSkating({
     };
   }, [teams, judges, dances, scores, finalized, releasedDances, selectedDanceId]);
  
-  useAutoScroll(scrollContainerRef, contentRef, teamScores.length);
+  useAutoScroll(scrollContainerRef, contentRef, isAnimationOn, teamScores.length);
  
   if (dances.length === 0 || teamScores.length === 0) {
     return <PendingResults />;
@@ -209,34 +214,7 @@ function FinalResultsSkating({
       <div ref={contentRef} className="space-y-8 pb-10">
         <ResultsHeader name={name} selectedDanceName={dances.find(d => d.id === selectedDanceId)?.name || 'Overall Standings'} />
         
-        <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
-            <div className="relative pt-10 pb-14 px-6 border-2 border-dashed border-stone-200 rounded-3xl bg-stone-50/50 overflow-hidden">
-                <FinishLine />
-                <div className="space-y-8 relative z-10">
-                {teamScores.map((team) => {
-                    const percentage = ((maxRank - team.rank) / maxRank) * 88;
-                    return (
-                    <div key={team.id} className="relative h-16 flex items-center">
-                        <div className="absolute left-0 right-0 h-1.5 bg-stone-200 rounded-full top-1/2 -translate-y-1/2"></div>
-                        <motion.div
-                        initial={{ left: 0 }}
-                        animate={{ left: `${percentage}%` }}
-                        transition={{ type: 'spring', stiffness: 50, damping: 15 }}
-                        className="absolute flex flex-col items-center -translate-y-1/2 top-1/2"
-                        >
-                        <TeamAvatar team={team} displayValue={formatRank(team.rank)} />
-                        <div className="mt-2 bg-white px-3 py-1 rounded-full shadow-sm border border-stone-100 text-xs font-bold text-stone-700 whitespace-nowrap">
-                            {team.name}
-                        </div>
-                        </motion.div>
-                    </div>
-                    );
-                })}
-                </div>
-            </div>
-        </div>
- 
-        <LeaderboardTable teamScores={teamScores} scoreLabel={selectedDanceId === 'all' ? "Sum of Places" : "Rank"} />
+         
         
         <SkatingBreakdown 
             name={name}
@@ -248,6 +226,8 @@ function FinalResultsSkating({
             releasedDances={releasedDances}
             danceResults={danceResults}
             finalResults={finalResults}
+            isAnimationOn={isAnimationOn} 
+            selectedDanceName={dances.find(d => d.id === selectedDanceId)?.name || 'Overall Standings'}
         />
       </div>
     </div>
@@ -262,7 +242,8 @@ function OriginalResults({
   judges,
   selectedDanceId,
   finalized = {},
-  releasedDances = {}
+  releasedDances = {},
+  isAnimationOn = true
 }: {
   name: string;
   scores: EventData['scores'];
@@ -272,6 +253,7 @@ function OriginalResults({
   selectedDanceId: string;
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
+  isAnimationOn?: boolean;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -326,7 +308,7 @@ function OriginalResults({
     });
   }, [selectedDanceId, teams, dances, judges, scores, finalized, releasedDances]);
  
-  useAutoScroll(scrollContainerRef, contentRef, teamScores.length);
+  useAutoScroll(scrollContainerRef, contentRef, isAnimationOn, teamScores.length);
  
   if (teamScores.length === 0) {
     return <PendingResults />;

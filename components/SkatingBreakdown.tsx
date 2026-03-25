@@ -13,6 +13,8 @@ interface SkatingBreakdownProps {
   releasedDances: EventData['releasedDances'];
   danceResults: Record<string, Placement[]>;
   finalResults: FinalResult[];
+  isAnimationOn: boolean;
+  selectedDanceName: string;
 }
 
 export default function SkatingBreakdown({
@@ -25,6 +27,8 @@ export default function SkatingBreakdown({
   releasedDances = {},
   danceResults,
   finalResults: results,
+  isAnimationOn,
+  selectedDanceName,
 }: SkatingBreakdownProps) {
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -197,24 +201,10 @@ export default function SkatingBreakdown({
   return (
     <div className="space-y-8 mt-12">
       <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-bold text-stone-900 flex items-center">
-            <Icon name="Activity" className="mr-3 h-6 w-6 text-violet-600" />
-            Skating System Breakdown
-          </h2>
-          <button 
-            onClick={() => setShowBreakdown(!showBreakdown)} 
-            className="px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 font-bold rounded-xl transition-all border border-violet-200 flex items-center gap-2"
-          >
-            <Icon name={showBreakdown ? 'EyeOff' : 'Eye'} className="h-4 w-4" />
-            {showBreakdown ? 'Hide' : 'View'} Detailed Calculation
-          </button>
-        </div>
-
-        {showBreakdown && (
+         
           <div className="space-y-12">
             {/* Quick Legend */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
                 <h4 className="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-2">Sum of Places</h4>
                 <p className="text-[10px] text-stone-400">Total of ranks across all dances. Lower is better.</p>
@@ -231,10 +221,10 @@ export default function SkatingBreakdown({
                 <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Grand Tabulation</h4>
                 <p className="text-[10px] text-amber-700/60">Pooling ALL individual judge marks from ALL dances.</p>
               </div>
-            </div>
+            </div> */}
 
             {/* 1. Final Summary Table (Overall Results) */}
-            {released.length > 0 && (
+            {released.length > 0 && (selectedDanceName === 'Overall Standings' || !isAnimationOn) && (
               <div className="animate-in fade-in duration-500">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="h-px flex-grow bg-stone-200"></div>
@@ -282,14 +272,18 @@ export default function SkatingBreakdown({
               </div>
             )}
 
-            <div className="flex items-center gap-4">
+
+
+
+
+            {(selectedDanceName !== 'Overall Standings' || !isAnimationOn) &&<div className="flex items-center gap-4">
               <div className="h-px flex-grow bg-stone-200"></div>
-              <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest">Individual Dance Tabulations (Rule 10 Single)</h3>
+              <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest">Individual Dance Tabulations</h3>
               <div className="h-px flex-grow bg-stone-200"></div>
-            </div>
+            </div>}
             
             {released.map(dance => (
-              <div key={dance.id}>
+              (selectedDanceName === dance.name || !isAnimationOn) ?(<div key={dance.id}>
                 {renderTabulationTable(
                   `Dance: ${dance.name}`, 
                   judges.map((_, i) => `J${i+1}`), 
@@ -297,10 +291,11 @@ export default function SkatingBreakdown({
                   getDanceMarksSource(dance.id),
                   Math.floor(judges.length / 2) + 1
                 )}
-              </div>
+              </div>) : null
             ))}
 
-            {released.length > 1 && (
+
+            {released.length > 1 && !isAnimationOn && (
               <>
                 <div className="flex items-center gap-4 pt-10">
                   <div className="h-px flex-grow bg-stone-200"></div>
@@ -361,7 +356,7 @@ export default function SkatingBreakdown({
                   </div>
                 </div>
 
-                <div className="mt-10">
+                {/* <div className="mt-10">
                   {renderTabulationTable(
                     "Rule 11: Majority Check (Multi-Dance)", 
                     released.map((d, i) => `D${i+1}`), 
@@ -369,11 +364,11 @@ export default function SkatingBreakdown({
                     getRule11MarksSource(),
                     Math.floor(released.length / 2) + 1
                   )}
-                </div>
+                </div> */}
 
                 <div className="mt-10">
                   {renderTabulationTable(
-                    "Grand Tabulation: All Marks Pool", 
+                    "Rule 11: Grand Tabulation: All Marks Pool", 
                     Array.from({length: Math.min(10, released.length * judges.length)}, (_, i) => `M${i+1}`).concat(released.length * judges.length > 10 ? ['...'] : []), 
                     results, 
                     getGrandTabulationSource(),
@@ -383,7 +378,7 @@ export default function SkatingBreakdown({
               </>
             )}
           </div>
-        )}
+        
       </div>
     </div>
   );
