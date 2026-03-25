@@ -45,11 +45,11 @@ export default function ScoringPage({
 
   // Sync with current judge's scores for the selected dance from DB (only if not finalized)
   useEffect(() => {
-    if (currentJudgeId) {
+    if (currentJudgeId && !isFinalized(currentJudgeId)) {
       const dbScores = scores[selectedDanceId]?.[currentJudgeId] || {};
       setLocalScores(dbScores);
     }
-  }, [selectedDanceId, currentJudgeId]); // Removed scores from dependencies to prevent overwriting local edits when other judges save
+  }, [selectedDanceId, currentJudgeId, scores, finalized]); // Added scores and finalized to dependencies to react to admin changes
 
   const isFinalized = (judgeId: string) => {
     return finalized?.[selectedDanceId]?.[judgeId] === true;

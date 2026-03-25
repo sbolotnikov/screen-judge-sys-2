@@ -38,6 +38,9 @@ export default function SettingsDashboard({
   const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
   const [loadingJudges, setLoadingJudges] = useState(false);
   const { updateEventField, setCompID, updateEvent } = usePartySettings();
+   const [isTeamsOpen, setIsTeamsOpen] = useState(false);
+  const [isDancesOpen, setIsDancesOpen] = useState(false);
+  const [isJudgesOpen, setIsJudgesOpen] = useState(false);
 
   useEffect(() => {
     if (partyID) {
@@ -60,20 +63,29 @@ export default function SettingsDashboard({
     }
   };
 
-  const unfinalizeJudge = async (judgeId: string) => {
-    if (confirm(`Are you sure you want to unfinalize results for this judge? They will be able to edit their marks again.`)) {
-      try {
-        const newFinalized = JSON.parse(JSON.stringify(finalized || {}));
-        // Remove this judge from all dances in finalized object
-        Object.keys(newFinalized).forEach(danceId => {
-          if (newFinalized[danceId][judgeId]) {
-            delete newFinalized[danceId][judgeId];
+  const toggleJudgeFinalized = async (judgeId: string, danceId?: string) => {
+    try {
+      const newFinalized = JSON.parse(JSON.stringify(finalized || {}));
+      
+      if (danceId) {
+        // Toggle for specific dance
+        if (!newFinalized[danceId]) newFinalized[danceId] = {};
+        newFinalized[danceId][judgeId] = !newFinalized[danceId][judgeId];
+      } else {
+        // Unfinalize ALL results for this judge
+        if (!confirm(`Are you sure you want to unfinalize ALL results for this judge? They will be able to edit their marks again.`)) {
+          return;
+        }
+        Object.keys(newFinalized).forEach(dId => {
+          if (newFinalized[dId][judgeId]) {
+            delete newFinalized[dId][judgeId];
           }
         });
-        await updateEventField(id, 'finalized', newFinalized);
-      } catch (err) {
-        console.error('Error unfinalizing judge:', err);
       }
+      
+      await updateEventField(id, 'finalized', newFinalized);
+    } catch (err) {
+      console.error('Error toggling judge finalized:', err);
     }
   };
 
@@ -344,71 +356,41 @@ export default function SettingsDashboard({
         </div>
         </div>
 
-      <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="p-2 bg-amber-100 rounded-xl">
-            <Icon name="Gavel" className="h-6 w-6 text-amber-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-stone-900">Judge Results Status</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {judges.length === 0 && (
-            <p className="text-stone-500 italic col-span-full">No judges added yet.</p>
-          )}
-          {judges.map((judge) => (
-            <div key={judge.id} className="flex flex-col p-4 border border-stone-200 rounded-2xl bg-stone-50/50">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3 truncate">
-                  {judge.image ? (
-                    <Image src={judge.image} alt={judge.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-stone-200 flex items-center justify-center">
-                      <Icon name="User" className="h-4 w-4 text-stone-400" />
-                    </div>
-                  )}
-                  <span className="font-bold text-stone-900 truncate">{judge.name}</span>
-                </div>
-                <button
-                  onClick={() => unfinalizeJudge(judge.id)}
-                  className="text-[10px] font-bold uppercase tracking-tighter text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md transition-colors"
-                  title="Allow judge to edit again"
-                >
-                  Unfinalize
-                </button>
-              </div>
-              <div className="flex items-center justify-end">
-                {dances.map(dance => {
-                  const isFinished = finalized?.[dance.id]?.[judge.id];
-                  return (
-                    <div key={dance.id} title={`${dance.name}: ${isFinished ? 'Finalized' : 'Pending'}`} className={`w-3 h-3 rounded-full ml-1.5 ${isFinished ? 'bg-green-500' : 'bg-stone-300'}`}></div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <div className={`flex ${isTeamsOpen || isDancesOpen || isJudgesOpen ? 'flex-wrap' : 'flex-row'}`}>
 
-      <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
+      <div className={`bg-white shadow-sm sm:rounded-3xl p-2 m-1border border-stone-200/60 ${isTeamsOpen ? 'w-full': 'w-1/3'}`}>
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-violet-100 rounded-xl">
               <Icon name="Users" className="h-6 w-6 text-violet-600" />
             </div>
-            <h2 className="text-2xl font-bold text-stone-900">Teams</h2>
+            <h2 className="text-2xl font-bold text-stone-900 text-center">Teams: {teams.length}</h2>
           </div>
-          <button
+          {isTeamsOpen ?(<div className="space-x-2">
+            <button
             onClick={addTeam}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
             <Icon name="Plus" className="mr-2 h-4 w-4" /> Add Team
           </button>
+          <button
+            onClick={() => setIsTeamsOpen(false)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
+          >
+            <Icon name="X" className="mr-2 h-4 w-4" /> Close
+          </button>
+          </div>):(<button
+            onClick={() => setIsTeamsOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
+          >
+            <Icon name="Activity" className="mr-2 h-4 w-4" /> Manage Teams
+          </button>)}
         </div>
         <div className="space-y-4">
           {teams.length === 0 && (
             <p className="text-stone-500 italic">No teams added yet.</p>
           )}
-          {teams.map((team, index) => (
+          {isTeamsOpen &&teams.map((team, index) => (
             <div
               key={team.id}
               className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl bg-stone-50/50 hover:bg-white transition-colors"
@@ -461,26 +443,43 @@ export default function SettingsDashboard({
         </div>
       </div>
 
-      <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
+      <div className={`bg-white shadow-sm sm:rounded-3xl p-2 m-1 border border-stone-200/60 ${isDancesOpen ? 'w-full': 'w-1/3'}`}>
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-pink-100 rounded-xl">
               <Icon name="Music" className="h-6 w-6 text-pink-600" />
             </div>
-            <h2 className="text-2xl font-bold text-stone-900">Dances</h2>
+            <h2 className="text-2xl font-bold text-stone-900 text-center">Dances: {dances.length}</h2>
           </div>
-          <button
+
+          {isDancesOpen ?(<div className="space-x-2">
+             <button
             onClick={addDance}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
             <Icon name="Plus" className="mr-2 h-4 w-4" /> Add Dance
           </button>
+          <button
+            onClick={() => setIsDancesOpen(false)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
+          >
+            <Icon name="X" className="mr-2 h-4 w-4" /> Close
+          </button>
+          </div>):(<button
+            onClick={() => setIsDancesOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
+          >
+            <Icon name="Activity" className="mr-2 h-4 w-4" /> Manage Dances
+          </button>)}
+
+
+         
         </div>
         <div className="space-y-4">
           {dances.length === 0 && (
             <p className="text-stone-500 italic">No dances added yet.</p>
           )}
-          {dances.map((dance, index) => (
+          {isDancesOpen && dances.map((dance, index) => (
             <div
               key={dance.id}
               className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl bg-stone-50/50 hover:bg-white transition-colors"
@@ -502,26 +501,44 @@ export default function SettingsDashboard({
         </div>
       </div>
 
-      <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
+      <div  className={`bg-white shadow-sm sm:rounded-3xl p-2 m-1 border border-stone-200/60 ${isJudgesOpen ? 'w-full': 'w-1/3'}`}>
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-amber-100 rounded-xl">
               <Icon name="Gavel" className="h-6 w-6 text-amber-600" />
             </div>
-            <h2 className="text-2xl font-bold text-stone-900">Judges</h2>
+            <h2 className="text-2xl font-bold text-stone-900 text-center">Judges: {judges.length}</h2>
           </div>
+
+
+          {isJudgesOpen ?(<div className="space-x-2">
           <button
             onClick={addJudge}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
           >
             <Icon name="Plus" className="mr-2 h-4 w-4" /> Add Judge
           </button>
+          <button
+            onClick={() => setIsJudgesOpen(false)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
+          >
+            <Icon name="X" className="mr-2 h-4 w-4" /> Close
+          </button>
+          </div>):(<button
+            onClick={() => setIsJudgesOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
+          >
+            <Icon name="Activity" className="mr-2 h-4 w-4" /> Manage Judges
+          </button>)}
+
+
+
         </div>
         <div className="space-y-4">
           {judges.length === 0 && (
             <p className="text-stone-500 italic">No judges added yet.</p>
           )}
-          {judges.map((judge, index) => (
+          {isJudgesOpen && judges.map((judge, index) => (
             <div
               key={judge.id}
               className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl bg-stone-50/50 hover:bg-white transition-colors"
@@ -566,6 +583,62 @@ export default function SettingsDashboard({
         </div>
       </div>
 
+
+
+
+</div>
+
+
+
+<div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 bg-amber-100 rounded-xl">
+            <Icon name="Gavel" className="h-6 w-6 text-amber-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-stone-900">Judge Results Status</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {judges.length === 0 && (
+            <p className="text-stone-500 italic col-span-full">No judges added yet.</p>
+          )}
+          {judges.map((judge) => (
+            <div key={judge.id} className="flex flex-col p-4 border border-stone-200 rounded-2xl bg-stone-50/50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-3 truncate">
+                  {judge.image ? (
+                    <Image src={judge.image} alt={judge.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-stone-200 flex items-center justify-center">
+                      <Icon name="User" className="h-4 w-4 text-stone-400" />
+                    </div>
+                  )}
+                  <span className="font-bold text-stone-900 truncate">{judge.name}</span>
+                </div>
+                <button
+                  onClick={() => toggleJudgeFinalized(judge.id)}
+                  className="text-[10px] font-bold uppercase tracking-tighter text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md transition-colors"
+                  title="Unfinalize ALL for this judge"
+                >
+                  Unfinalize All
+                </button>
+              </div>
+              <div className="flex items-center justify-end flex-wrap gap-1.5 mt-2">
+                {dances.map(dance => {
+                  const isFinished = finalized?.[dance.id]?.[judge.id];
+                  return (
+                    <button
+                      key={dance.id}
+                      onClick={() => toggleJudgeFinalized(judge.id, dance.id)}
+                      title={`${dance.name}: ${isFinished ? 'Finalized' : 'Pending'} (Click to toggle)`}
+                      className={`w-4 h-4 rounded-full border border-white shadow-sm transition-all hover:scale-125 ${isFinished ? 'bg-green-500' : 'bg-stone-300'}`}
+                    ></button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
       <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
         <div className="flex items-center space-x-3 mb-6">
           <div className="p-2 bg-red-100 rounded-xl">

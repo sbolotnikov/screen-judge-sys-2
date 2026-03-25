@@ -137,7 +137,7 @@ const Page: React.FC<Props> = () => {
     events,
     eventID,
     selectedDanceId,
-    selectedDanceIdJudge
+    selectedDanceIdJudge,
   } = usePartySettings();
   // const { heat } = useComp(compChoice || 'T9FLgtEDmxQFYFTnfrvO');
   const typesSet = [
@@ -254,9 +254,14 @@ const Page: React.FC<Props> = () => {
   };
   const getCompsArray = useCallback(async () => {
     const q = await getDocs(collection(db2, 'competitions'));
-    const arr1 = q.docs.map((doc: { data: () => { name: string } }) => doc.data());
+    const arr1 = q.docs.map((doc: { data: () => { name: string } }) =>
+      doc.data(),
+    );
     const arr2 = q.docs.map((doc: { id: string }) => doc.id);
-    const arr = arr1.map((x: { name: string }, i: number) => ({ name: x.name, id: arr2[i] })) as {
+    const arr = arr1.map((x: { name: string }, i: number) => ({
+      name: x.name,
+      id: arr2[i],
+    })) as {
       name: string;
       id: string;
     }[];
@@ -576,8 +581,8 @@ const Page: React.FC<Props> = () => {
                       {displayedPictures
                         .sort((a, b) => (a.name! > b.name! ? 1 : -1))
                         .map((item, i) => (
-                          <option key={item.name+i} value={item.name}>
-                            {i+1}. {item.name}
+                          <option key={item.name + i} value={item.name}>
+                            {i + 1}. {item.name}
                           </option>
                         ))}
                     </select>
@@ -625,7 +630,7 @@ const Page: React.FC<Props> = () => {
                         .sort((a, b) => (a.name! > b.name! ? 1 : -1))
                         .map((item, i) => (
                           <option
-                            key={item.name+i}
+                            key={item.name + i}
                             value={item.name}
                             className="w-full h-14 flex flex-row justify-between items-center"
                           >
@@ -886,7 +891,6 @@ const Page: React.FC<Props> = () => {
                   <div className="flex flex-row justify-center items-center">
                     <div className="flex flex-col justify-center items-center">
                       {events && (
-                        
                         <select
                           value={eventID}
                           onChange={(e) =>
@@ -901,41 +905,55 @@ const Page: React.FC<Props> = () => {
                           ))}
                         </select>
                       )}
-                      <p className="text-center w-32">Choose Event to show results</p>
+                      <p className="text-center w-32">
+                        Choose Event to show results
+                      </p>
                     </div>
-                    {eventID.length>0 && (
-                       <div className="flex flex-col m-1">                  
-                      <select
-              value={selectedDanceId}
-              onChange={(e) =>handleChange(e.target.value, 'selectedDanceId')}
-              className="block w-32 h-9 bg-white rounded-lg border border-[#776548] text-[#444] focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm font-medium"
-            >
-              <option value="all">Overall (All Dances)</option>
-              {events.filter(event => event.id === eventID)[0].dances.map((dance) => (
-                <option key={dance.id} value={dance.id}>
-                  {dance.name}
-                </option>
-              ))}
-            </select>
-             <p className="text-center w-32">Choose dance to display</p>
-</div>
+                    {eventID.length > 0 && (
+                      <div className="flex flex-col m-1">
+                        <select
+                          value={selectedDanceId}
+                          onChange={(e) =>
+                            handleChange(e.target.value, 'selectedDanceId')
+                          }
+                          className="block w-32 h-9 bg-white rounded-lg border border-[#776548] text-[#444] focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm font-medium"
+                        >
+                          <option value="all">Overall (All Dances)</option>
+                          {events
+                            .filter((event) => event.id === eventID)[0]
+                            .dances.map((dance) => (
+                              <option key={dance.id} value={dance.id}>
+                                {dance.name}
+                              </option>
+                            ))}
+                        </select>
+                        <p className="text-center w-32">
+                          Choose dance to display
+                        </p>
+                      </div>
                     )}
-                    {eventID.length>0 && (
-                      <div className="flex flex-col mb-1">   
-                      <select
-              value={selectedDanceIdJudge}
-              onChange={(e) =>handleChange(e.target.value, 'selectedDanceIdJudge')}
-              className="block w-32 h-9 bg-white rounded-lg border border-[#776548] text-[#444] focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm font-medium"
-            >
-              <option value="all">Overall (All Dances)</option>
-              {events.filter(event => event.id === eventID)[0].dances.map((dance) => (
-                <option key={dance.id} value={dance.id}>
-                  {dance.name}
-                </option>
-              ))}
-            </select>
-             <p className="text-center w-32">Choose dance to judge</p>
-</div>
+                    {eventID.length > 0 && (
+                      <div className="flex flex-col mb-1">
+                        <select
+                          value={selectedDanceIdJudge}
+                          onChange={(e) =>
+                            handleChange(e.target.value, 'selectedDanceIdJudge')
+                          }
+                          className="block w-32 h-9 bg-white rounded-lg border border-[#776548] text-[#444] focus:outline-none focus:ring-violet-500 focus:border-violet-500 sm:text-sm font-medium"
+                        >
+                          <option value="all">Overall (All Dances)</option>
+                          {events
+                            .filter((event) => event.id === eventID)[0]
+                            .dances.map((dance) => (
+                              <option key={dance.id} value={dance.id}>
+                                {dance.name}
+                              </option>
+                            ))}
+                        </select>
+                        <p className="text-center w-32">
+                          Choose dance to judge
+                        </p>
+                      </div>
                     )}
                     {/* <div className="flex flex-col justify-center items-center">
                       {compsArr && (
@@ -1008,7 +1026,6 @@ const Page: React.FC<Props> = () => {
                     <p className="ml-2">Show SVG Animation</p>
                   </div>
 
-       
                   {showSVGAnimation && (
                     <div className="w-full flex flex-row flex-wrap mb-2.5">
                       <div className="w-1/2 flex flex-col justify-center items-center p-1">
