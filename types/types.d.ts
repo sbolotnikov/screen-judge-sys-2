@@ -49,3 +49,31 @@ export type EventData = {
   releasedDances?: Record<string, boolean>;
 }
 
+export interface Placement {
+  coupleId: string;
+  rank: number;
+  marks: number[];
+  majorityCount: number;
+  majoritySum: number;
+  isTie?: boolean;
+}
+
+export interface FinalResult {
+  coupleId: string;
+  totalScore: number;
+  dancePlacements: Record<string, number>;
+  finalRank: number;
+  rule10Resolution?: {
+    rank: number;
+    isTie: boolean;
+  };
+  rule11Resolution?: {
+    placementsAsMarks: number[];
+    tieBreakRank: number;
+    majorityCount: number;
+    majoritySum: number;
+  };
+}
+
+export type Rankings = Record<string, Record<string, Record<string, number>>>;
+
