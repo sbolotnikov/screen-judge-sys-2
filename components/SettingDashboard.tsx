@@ -543,7 +543,7 @@ export default function SettingsDashboard({
               key={judge.id}
               className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl bg-stone-50/50 hover:bg-white transition-colors"
             >
-              <div className="h-12 w-12 rounded-full overflow-hidden bg-stone-200 flex-shrink-0">
+              <div className="h-12 w-12 rounded-full overflow-hidden bg-stone-200 shrink-0">
                 {judge.image ? (
                   <Image
                     src={judge.image}
@@ -744,7 +744,7 @@ export default function SettingsDashboard({
                       onClick={() => selectJudge(judge)}
                       className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl hover:border-violet-300 hover:bg-violet-50 transition-all text-left"
                     >
-                      <div className="h-12 w-12 rounded-full overflow-hidden bg-stone-100 flex-shrink-0">
+                      <div className="h-12 w-12 rounded-full overflow-hidden bg-stone-100 shrink-0">
                         {judge.image ? (
                           <Image
                             src={judge.image}

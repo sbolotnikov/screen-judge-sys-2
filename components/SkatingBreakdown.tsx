@@ -227,9 +227,9 @@ export default function SkatingBreakdown({
             {released.length > 0 && (selectedDanceName === 'Overall Standings' || !isAnimationOn) && (
               <div className="animate-in fade-in duration-500">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="h-px flex-grow bg-stone-200"></div>
+                  <div className="h-px grow bg-stone-200"></div>
                   <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest">Overall Standings</h3>
-                  <div className="h-px flex-grow bg-stone-200"></div>
+                  <div className="h-px grow bg-stone-200"></div>
                 </div>
                 <div className="overflow-x-auto bg-stone-50/50 rounded-2xl border border-stone-200 p-2">
                   <table className="w-full text-xs text-center border-separate border-spacing-0.5">
@@ -277,9 +277,9 @@ export default function SkatingBreakdown({
 
 
             {(selectedDanceName !== 'Overall Standings' || !isAnimationOn) &&<div className="flex items-center gap-4">
-              <div className="h-px flex-grow bg-stone-200"></div>
+              <div className="h-px grow bg-stone-200"></div>
               <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest">Individual Dance Tabulations</h3>
-              <div className="h-px flex-grow bg-stone-200"></div>
+              <div className="h-px grow bg-stone-200"></div>
             </div>}
             
             {released.map(dance => (
@@ -298,9 +298,9 @@ export default function SkatingBreakdown({
             {released.length > 1 && !isAnimationOn && (
               <>
                 <div className="flex items-center gap-4 pt-10">
-                  <div className="h-px flex-grow bg-stone-200"></div>
+                  <div className="h-px grow bg-stone-200"></div>
                   <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest">Multi-Dance Tie-Breakers</h3>
-                  <div className="h-px flex-grow bg-stone-200"></div>
+                  <div className="h-px grow bg-stone-200"></div>
                 </div>
 
                 {/* Rule 10 Multi */}
