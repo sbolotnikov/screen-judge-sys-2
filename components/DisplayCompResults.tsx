@@ -30,33 +30,48 @@ export default function DisplayCompResults(props: {
 function useAutoScroll(
   containerRef: React.RefObject<HTMLDivElement | null>,
   contentRef: React.RefObject<HTMLDivElement | null>,
-    isAnimationOn: boolean = true,
-  dependency: any
+  isAnimationOn: boolean = true,
+  dependency: any,
+  danceId: string,
+  eventName: string
 ) {
   useEffect(() => {
     let stopped = false;
     if (!isAnimationOn) return;
     let currentAnimation: { stop: () => void } | null = null;
- 
+
     const sleep = (ms: number) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms));
- 
+
     const run = async () => {
-      await sleep(1000); // initial settle delay
-      if (stopped) return;
- 
+      // Wait for layout to settle and refs to be assigned
+      let retries = 0;
+      while (retries < 10 && (!containerRef.current || !contentRef.current)) {
+        await sleep(500);
+        retries++;
+        if (stopped) return;
+      }
+
       const container = containerRef.current;
       const content = contentRef.current;
       if (!container || !content) return;
- 
+
+      // Small additional delay to ensure images/content are fully rendered
+      await sleep(1000);
+      if (stopped) return;
+
       while (!stopped) {
         const maxScroll = content.scrollHeight - container.clientHeight;
-        if (maxScroll <= 0) break;
- 
-        // px/s — tune this number for faster/slower scroll
-        const speed = 60;
+        
+        if (maxScroll <= 0) {
+          // If no scroll needed, wait and check again later (maybe content changed)
+          await sleep(2000);
+          continue;
+        }
+
+        const speed = 40; // Reduced speed for better readability
         const duration = maxScroll / speed;
- 
+
         // Scroll down
         await new Promise<void>((resolve) => {
           currentAnimation = animate(container.scrollTop, maxScroll, {
@@ -66,10 +81,11 @@ function useAutoScroll(
             onComplete: resolve,
           });
         });
+        
         if (stopped) break;
-        await sleep(2000); // pause at bottom
+        await sleep(3000); // pause at bottom
         if (stopped) break;
- 
+
         // Scroll back up
         await new Promise<void>((resolve) => {
           currentAnimation = animate(maxScroll, 0, {
@@ -79,18 +95,19 @@ function useAutoScroll(
             onComplete: resolve,
           });
         });
+        
         if (stopped) break;
-        await sleep(2000); // pause at top
+        await sleep(3000); // pause at top
       }
     };
- 
+
     run();
- 
+
     return () => {
       stopped = true;
       currentAnimation?.stop();
     };
-  }, [dependency, containerRef, contentRef]);
+  }, [dependency, isAnimationOn, danceId, eventName, containerRef, contentRef]);
 }
  
 function FinalResultsSkating({
@@ -201,7 +218,7 @@ function FinalResultsSkating({
     };
   }, [teams, judges, dances, scores, finalized, releasedDances, selectedDanceId]);
  
-  useAutoScroll(scrollContainerRef, contentRef, isAnimationOn, teamScores.length);
+  useAutoScroll(scrollContainerRef, contentRef, isAnimationOn, teamScores.length, selectedDanceId, name);
  
   if (dances.length === 0 || teamScores.length === 0) {
     return <PendingResults />;
@@ -308,7 +325,7 @@ function OriginalResults({
     });
   }, [selectedDanceId, teams, dances, judges, scores, finalized, releasedDances]);
  
-  useAutoScroll(scrollContainerRef, contentRef, isAnimationOn, teamScores.length);
+  useAutoScroll(scrollContainerRef, contentRef, isAnimationOn, teamScores.length, selectedDanceId, name);
  
   if (teamScores.length === 0) {
     return <PendingResults />;

@@ -78,35 +78,62 @@ export default function ScoringPage({
   };
 
   /**
-   * Final Format Logic: Assign a team to a specific rank with displacement.
+   * Final Format Logic: Assign a team to a specific rank.
+   * - If the team is from the pool:
+   *    - Target occupied: shifts existing teams down.
+   *    - Target empty: direct assignment.
+   * - If the team is already ranked:
+   *    - Target occupied: swaps positions.
+   *    - Target empty: moves to new position.
    */
   const handleAssignRank = (teamId: string, targetRank: number) => {
     if (!currentJudgeId || isFinalized(currentJudgeId)) return;
 
-    const newLocalScores = { ...localScores };
-    
-    // 1. Remove team from its current position to avoid duplicates
-    Object.keys(newLocalScores).forEach(tId => {
-      if (tId === teamId) delete newLocalScores[tId];
+    // 1. Create an ordered array of the current rankings
+    const rankedArray: (string | null)[] = Array(teams.length).fill(null);
+    Object.entries(localScores).forEach(([tId, rank]) => {
+      if (typeof rank === 'number' && rank >= 1 && rank <= teams.length) {
+        rankedArray[rank - 1] = tId;
+      }
     });
 
-    // 2. Displace existing teams (shift down)
-    let teamToPlace: string | null = teamId;
-    let rankToPlaceAt = targetRank;
+    const sourceIndex = rankedArray.indexOf(teamId);
+    const targetIndex = targetRank - 1;
+    const teamAtTarget = rankedArray[targetIndex];
 
-    while (teamToPlace && rankToPlaceAt <= teams.length) {
-      // Find if someone is already at this rank
-      const displacedTeamId = Object.keys(newLocalScores).find(
-        tId => newLocalScores[tId] === rankToPlaceAt
-      );
-
-      // Place the current team here
-      newLocalScores[teamToPlace] = rankToPlaceAt;
-
-      // The displaced team (if any) now needs to be placed at the next rank
-      teamToPlace = displacedTeamId || null;
-      rankToPlaceAt++;
+    if (sourceIndex !== -1) {
+      // TEAM ALREADY RANKED: Move or Swap
+      if (teamAtTarget) {
+        // Swap the two teams (No shifting of others)
+        rankedArray[sourceIndex] = teamAtTarget;
+        rankedArray[targetIndex] = teamId;
+      } else {
+        // Move to empty slot (No shifting of others)
+        rankedArray[sourceIndex] = null;
+        rankedArray[targetIndex] = teamId;
+      }
+    } else {
+      // TEAM FROM POOL: Assign or Shift
+      if (teamAtTarget) {
+        // OCCUPIED: Insert and shift everything below down
+        rankedArray.splice(targetIndex, 0, teamId);
+      } else {
+        // EMPTY: Just fill the spot (No shifting of others)
+        rankedArray[targetIndex] = teamId;
+      }
     }
+    
+    // 4. Any team pushed beyond the last slot is effectively "unranked"
+    // We truncate to teams.length to maintain the pool consistency
+    const finalRankedIds = rankedArray.slice(0, teams.length);
+
+    // 5. Convert back to the Record format required by the state
+    const newLocalScores: Record<string, ScoreValue> = {};
+    finalRankedIds.forEach((tId, index) => {
+      if (tId) {
+        newLocalScores[tId] = index + 1;
+      }
+    });
 
     setLocalScores(newLocalScores);
     setSelectedTeamId(null);
@@ -370,8 +397,8 @@ export default function ScoringPage({
                     </div>
 
                     {/* Step 2: Ranking Slots */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="md:col-span-2">
+                    <div className="grid grid-cols-1 ">
+                      <div className="flex items-center gap-4 mb-6">
                         <h4 className="text-sm font-black text-stone-400 uppercase tracking-widest mb-4">
                           Step 2: Assign to a Placement
                         </h4>
@@ -385,10 +412,19 @@ export default function ScoringPage({
                         return (
                           <div 
                             key={rank}
-                            onClick={() => !isJudgeFinalized && selectedTeamId && handleAssignRank(selectedTeamId, rank)}
+                            onClick={() => {
+                              if (isJudgeFinalized) return;
+                              if (selectedTeamId) {
+                                handleAssignRank(selectedTeamId, rank);
+                              } else if (teamAtRank) {
+                                setSelectedTeamId(teamAtRank.id);
+                              }
+                            }}
                             className={`flex items-center p-4 rounded-3xl border-2 transition-all group ${
                               teamAtRank ? 'bg-white border-stone-200' : 'bg-stone-50 border-dashed border-stone-200'
-                            } ${!isJudgeFinalized && selectedTeamId ? 'cursor-pointer hover:border-violet-400 hover:bg-violet-50 hover:scale-[1.02]' : ''}`}
+                            } ${!isJudgeFinalized ? 'cursor-pointer hover:border-violet-400 hover:bg-violet-50 hover:scale-[1.02]' : ''} ${
+                              selectedTeamId && teamAtRankId === selectedTeamId ? 'ring-4 ring-violet-100 border-violet-600' : ''
+                            }`}
                           >
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl mr-5 transition-colors ${
                               teamAtRank ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-400 group-hover:bg-violet-200 group-hover:text-violet-600'

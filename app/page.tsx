@@ -920,8 +920,8 @@ const Page: React.FC<Props> = () => {
                         >
                           <option value="all">Overall (All Dances)</option>
                           {events
-                            .filter((event) => event.id === eventID)[0]
-                            .dances.map((dance) => (
+                            .find((event) => event.id === eventID)
+                            ?.dances.map((dance) => (
                               <option key={dance.id} value={dance.id}>
                                 {dance.name}
                               </option>
@@ -943,8 +943,8 @@ const Page: React.FC<Props> = () => {
                         >
                           <option value="all">Overall (All Dances)</option>
                           {events
-                            .filter((event) => event.id === eventID)[0]
-                            .dances.map((dance) => (
+                            .find((event) => event.id === eventID)
+                            ?.dances.map((dance) => (
                               <option key={dance.id} value={dance.id}>
                                 {dance.name}
                               </option>

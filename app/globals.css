@@ -96,6 +96,14 @@
   body.keyboard {
     height: calc(100% + 500px); /* add padding for keyboard */
   }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 :root {
   --foreground-rgb: 0, 0, 0;

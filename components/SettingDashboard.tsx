@@ -103,100 +103,174 @@ export default function SettingsDashboard({
     if (typeof window === 'undefined') return;
     
     try {
-      // Dynamically import jspdf and jspdf-autotable to avoid SSR issues
       const { jsPDF } = await import('jspdf');
       const { default: autoTable } = await import('jspdf-autotable');
+      const { calculateDancePlacements, calculateFinalResults } = await import('@/services/skatingSystem');
 
-      const doc = new jsPDF();
+      const doc = new jsPDF('l', 'mm', 'a4'); // Use landscape for better table width
       const pageWidth = doc.internal.pageSize.getWidth();
+      const released = dances.filter(d => releasedDances?.[d.id]);
 
       // Title
       doc.setFontSize(22);
       doc.text(name || 'Competition Results', pageWidth / 2, 20, { align: 'center' });
+      doc.setFontSize(14);
+      doc.text(`Format: ${judgingFormat}`, pageWidth / 2, 28, { align: 'center' });
 
-      // Summary of Results (Leaderboard)
-      doc.setFontSize(18);
-      doc.text('Summary of Results', 14, 35);
+      if (judgingFormat === 'Original') {
+        // ORIGINAL FORMAT EXPORT
+        doc.setFontSize(18);
+        doc.text('Summary of Results', 14, 40);
 
-      // Calculate scores (logic similar to DisplayCompResults)
-      const teamScores = teams.map((team) => {
-        let total = 0;
-        dances.forEach((dance) => {
-          // ONLY count if dance is released
-          if (!releasedDances?.[dance.id]) return;
-
-          const danceScores = scores[dance.id] || {};
-          const danceFinalized = finalized?.[dance.id] || {};
-
-          judges.forEach((judge) => {
-            // Only count if judge finalized this dance
-            if (danceFinalized[judge.id]) {
-              const score = danceScores[judge.id]?.[team.id];
-              if (judgingFormat === 'Original') {
+        const teamScores = teams.map((team) => {
+          let total = 0;
+          released.forEach((dance) => {
+            const danceScores = scores[dance.id] || {};
+            const danceFinalized = finalized?.[dance.id] || {};
+            judges.forEach((judge) => {
+              if (danceFinalized[judge.id]) {
+                const score = danceScores[judge.id]?.[team.id];
                 if (score === 'gold') total += 3;
                 else if (score === 'silver') total += 2;
                 else if (score === 'bronze') total += 1;
-              } else if (typeof score === 'number') {
-                total += (teams.length + 1) - score;
               }
-            }
+            });
           });
+          return { ...team, score: total };
         });
-        return { ...team, score: total };
-      });
 
-      // Sort descending
-      teamScores.sort((a, b) => b.score - a.score);
-
-      // Leaderboard Table
-      autoTable(doc, {
-        startY: 40,
-        head: [['Rank', 'Team Name', 'Total Points']],
-        body: teamScores.map((team, index) => [
-          index + 1,
-          team.name,
-          team.score
-        ]),
-        theme: 'grid',
-        headStyles: { fillColor: [139, 92, 246] }, // Violet-600
-      });
-
-      // Detailed Marks for Each Dance
-      dances.forEach((dance) => {
-        // ONLY include in PDF if dance is released
-        if (!releasedDances?.[dance.id]) return;
-
-        doc.addPage();
-        doc.setFontSize(18);
-        doc.text(`Marks: ${dance.name}`, 14, 20);
-
-        // Table: Teams as rows, Judges as columns
-        const head = [['Team', ...judges.map(j => j.name)]];
-        const body = teams.map(team => {
-          const row = [team.name];
-          judges.forEach(judge => {
-            const isJudgeFinished = finalized?.[dance.id]?.[judge.id];
-            const mark = scores[dance.id]?.[judge.id]?.[team.id];
-
-            if (!isJudgeFinished || mark === null || mark === undefined) {
-              row.push('-');
-            } else if (typeof mark === 'number') {
-              row.push(mark.toString());
-            } else {
-              row.push(mark.charAt(0).toUpperCase() + mark.slice(1));
-            }
-          });
-          return row;
-        });
+        teamScores.sort((a, b) => b.score - a.score);
 
         autoTable(doc, {
-          startY: 25,
-          head,
-          body,
+          startY: 45,
+          head: [['Rank', 'Team Name', 'Total Points']],
+          body: teamScores.map((team, index) => [index + 1, team.name, team.score]),
           theme: 'grid',
-          headStyles: { fillColor: [219, 39, 119] }, // Pink-600
+          headStyles: { fillColor: [139, 92, 246] },
         });
-      });
+
+        released.forEach((dance) => {
+          doc.addPage();
+          doc.setFontSize(18);
+          doc.text(`Marks: ${dance.name}`, 14, 20);
+          const head = [['Team', ...judges.map(j => j.name)]];
+          const body = teams.map(team => {
+            const row = [team.name];
+            judges.forEach(judge => {
+              const isJudgeFinished = finalized?.[dance.id]?.[judge.id];
+              const mark = scores[dance.id]?.[judge.id]?.[team.id];
+              if (!isJudgeFinished || !mark) row.push('-');
+              else row.push(typeof mark === 'string' ? mark.charAt(0).toUpperCase() + mark.slice(1) : mark.toString());
+            });
+            return row;
+          });
+          autoTable(doc, { startY: 25, head, body, theme: 'grid', headStyles: { fillColor: [219, 39, 119] } });
+        });
+      } else {
+        // FINAL (SKATING SYSTEM) FORMAT EXPORT
+        
+        // 1. Calculate Results
+        const allDanceResults: Record<string, Placement[]> = {};
+        released.forEach(dance => {
+          const rankingsForDance: Record<string, Record<string, number>> = {};
+          judges.forEach(j => {
+            rankingsForDance[j.id] = {};
+            teams.forEach(t => {
+              const val = scores[dance.id]?.[j.id]?.[t.id];
+              rankingsForDance[j.id][t.id] = typeof val === 'number' ? val : teams.length + 1;
+            });
+          });
+          allDanceResults[dance.id] = calculateDancePlacements(rankingsForDance, teams, judges.length);
+        });
+
+        const rawRankings: Rankings = {};
+        dances.forEach(d => {
+          rawRankings[d.id] = {};
+          judges.forEach(j => {
+            rawRankings[d.id][j.id] = {};
+            teams.forEach(t => {
+                const val = scores[d.id]?.[j.id]?.[t.id];
+                rawRankings[d.id][j.id][t.id] = typeof val === 'number' ? val : teams.length + 1;
+            });
+          });
+        });
+
+        const finalResults = calculateFinalResults(
+          allDanceResults,
+          teams,
+          released,
+          rawRankings,
+          judges.map(j => j.id)
+        );
+
+        // 2. Overall Standings Page
+        doc.setFontSize(18);
+        doc.text('Overall Standings (Skating System)', 14, 40);
+        
+        const summaryHead = [['Rank', 'Team', ...released.map(d => d.name), 'Sum of Places', 'Final Rank']];
+        const summaryBody = finalResults.map(res => [
+          res.finalRank.toString(),
+          teams.find(t => t.id === res.coupleId)?.name || res.coupleId,
+          ...released.map(d => res.dancePlacements[d.id]?.toString() || '-'),
+          res.totalScore.toString(),
+          res.finalRank.toString()
+        ]);
+
+        autoTable(doc, {
+          startY: 45,
+          head: summaryHead,
+          body: summaryBody,
+          theme: 'grid',
+          headStyles: { fillColor: [139, 92, 246] },
+        });
+
+        // 3. Individual Dance Tabulations
+        released.forEach(dance => {
+          doc.addPage();
+          doc.setFontSize(18);
+          doc.text(`Dance Tabulation: ${dance.name}`, 14, 20);
+          
+          const dancePlacements = allDanceResults[dance.id] || [];
+          const head = [['Team', ...judges.map((_, i) => `J${i+1}`), ...Array.from({length: teams.length}, (_, i) => `1-${i+1}`), 'Result']];
+          
+          const body = dancePlacements.sort((a,b) => a.rank - b.rank).map(p => {
+            const teamName = teams.find(t => t.id === p.coupleId)?.name || p.coupleId;
+            const marks = judges.map(j => scores[dance.id]?.[j.id]?.[p.coupleId] || '-');
+            const majorities = Array.from({length: teams.length}, (_, i) => {
+              const colRank = i + 1;
+              const m = judges.map(j => scores[dance.id]?.[j.id]?.[p.coupleId]).filter(v => typeof v === 'number');
+              const count = m.filter(v => v <= colRank).length;
+              const sum = m.filter(v => v <= colRank).reduce((a, b) => a + b, 0);
+              return count >= (Math.floor(judges.length / 2) + 1) ? `${count} (${sum})` : count.toString();
+            });
+            return [teamName, ...marks, ...majorities, p.rank.toString()];
+          });
+
+          autoTable(doc, { startY: 25, head, body, theme: 'grid', headStyles: { fillColor: [16, 185, 129] }, styles: { fontSize: 8 } });
+        });
+
+        // 4. Multi-Dance Tie-Breakers (Rule 10 & 11)
+        if (released.length > 1) {
+          doc.addPage();
+          doc.setFontSize(18);
+          doc.text('Multi-Dance Resolutions (Rule 10/11)', 14, 20);
+
+          const r10Head = [['Team', ...released.map(d => d.name.substring(0,3)), ...Array.from({length: teams.length}, (_, i) => `1-${i+1}`), 'Total']];
+          const r10Body = finalResults.map(r => {
+            const teamName = teams.find(t => t.id === r.coupleId)?.name || r.coupleId;
+            const dancePlaces = released.map(d => r.dancePlacements[d.id]);
+            const counts = Array.from({length: teams.length}, (_, i) => {
+              const colRank = i + 1;
+              const c = dancePlaces.filter(v => v <= colRank).length;
+              const s = dancePlaces.filter(v => v <= colRank).reduce((a, b) => a + b, 0);
+              return `${c} (${s})`;
+            });
+            return [teamName, ...dancePlaces, ...counts, r.totalScore.toString()];
+          });
+
+          autoTable(doc, { startY: 25, head: r10Head, body: r10Body, theme: 'grid', headStyles: { fillColor: [5, 150, 105] }, styles: { fontSize: 8 } });
+        }
+      }
 
       doc.save(`${name || 'results'}_results.pdf`);
     } catch (err) {

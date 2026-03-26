@@ -551,20 +551,24 @@ const ShowPlayingModal: React.FC<Props> = ({
               unmuteVideos={unmuteVideos}
             />
           )}
-          {mode === 'Event Results' && events && events.length > 0 && (
-            <DisplayCompResults
-              name={events.filter((event) => event.id === eventID)[0].name!} 
-              scores={events.filter((event) => event.id === eventID)[0].scores}
-              teams={events.filter((event) => event.id === eventID)[0].teams}
-              dances={events.filter((event) => event.id === eventID)[0].dances}
-              judges={events.filter((event) => event.id === eventID)[0].judges}
-              selectedDanceId={selectedDanceId}
-              judgingFormat={events.filter((event) => event.id === eventID)[0].judgingFormat || 'Original'}
-              releasedDances={events.filter((event) => event.id === eventID)[0].releasedDances || {}}
-              finalized={events.filter((event) => event.id === eventID)[0].finalized || {}}
-              isAnimationOn={true}
-            />
-          )}
+          {mode === 'Event Results' && events && events.length > 0 && (() => {
+            const currentEvent = events.find((event) => event.id === eventID);
+            if (!currentEvent) return null;
+            return (
+              <DisplayCompResults
+                name={currentEvent.name!} 
+                scores={currentEvent.scores}
+                teams={currentEvent.teams}
+                dances={currentEvent.dances}
+                judges={currentEvent.judges}
+                selectedDanceId={selectedDanceId}
+                judgingFormat={currentEvent.judgingFormat || 'Original'}
+                releasedDances={currentEvent.releasedDances || {}}
+                finalized={currentEvent.finalized || {}}
+                isAnimationOn={true}
+              />
+            );
+          })()}
           {mode === 'Auto' && (
             <AutoImages
               picsArray={displayedPicturesAuto.map((pic) => pic.link)}
