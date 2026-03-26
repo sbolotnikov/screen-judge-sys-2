@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Team, Dance, Judge, EventData, JudgingFormat } from '@/types/types';
+import { Team, Dance, Judge, EventData, JudgingFormat, Placement, Rankings } from '@/types/types';
 import { Icon } from '@/components/Icon';
 import Image from 'next/image';
 import usePartySettings from '@/hooks/usePartySettings';
