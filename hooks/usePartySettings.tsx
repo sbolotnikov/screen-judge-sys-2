@@ -64,6 +64,7 @@ interface PartyContextType {
 interface ReturnPartyContextType extends PartyContextType {
   setCompID: (id: string) => void;
   addEvent: (event: Omit<EventData, 'id'>) => Promise<void>;
+  addEvents: (events: EventData[]) => Promise<void>;
   updateEvent: (eventId: string, event: Partial<EventData>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   updateEventField: <K extends keyof EventData>(eventId: string, field: K, value: EventData[K]) => Promise<void>;
@@ -161,6 +162,27 @@ export function PartySettingsProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const addEvents = async (newEvents: EventData[]) => {
+    if (!compID || compID === '00' || !newEvents.length) return;
+    
+    // Ensure all new events have IDs and create a clean merge
+    const sanitizedEvents = newEvents.map(event => ({
+      ...event,
+      id: event.id || crypto.randomUUID(),
+      createdAt: event.createdAt || Date.now()
+    }));
+
+    // We merge with existing events to avoid replacing everything if that's preferred
+    // but here we might want to just append them to the existing array in Firestore
+    // Using arrayUnion with multiple elements might work if db driver supports it, 
+    // but let's just update the whole array for simplicity and reliability here
+    const updatedEvents = [...party.events, ...sanitizedEvents];
+    
+    await updateDoc(doc(db, 'parties', compID), {
+      events: updatedEvents,
+    });
+  };
+
   const deleteEvent = async (eventId: string) => {
     if (!compID || compID === '00') return;
     const eventToRemove = party.events.find((e) => e.id === eventId);
@@ -207,6 +229,7 @@ export function PartySettingsProvider({ children }: { children: ReactNode }) {
     ...party,
     setCompID,
     addEvent,
+    addEvents,
     updateEvent,
     deleteEvent,
     updateEventField

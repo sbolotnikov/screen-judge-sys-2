@@ -12,7 +12,7 @@ type SessionUser = {
 };
 import { Icon } from '@/components/Icon';
 import SettingsDashboard from './SettingDashboard';
-import { Team, Dance, Judge, ScoreValue, JudgingFormat } from '@/types/types';
+import { Team, Dance, Judge, ScoreValue, JudgingFormat, EventData } from '@/types/types';
 import ScoringPage from './ScoringModal';
 import DisplayCompResults from './DisplayCompResults';
 import usePartySettings from '@/hooks/usePartySettings';
@@ -27,6 +27,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
   const {
     events,
     addEvent,
+    addEvents,
     deleteEvent,
     setCompID,
     selectedDanceId,
@@ -46,6 +47,52 @@ export default function EventsDashboard({ id }: { id?: string }) {
   const [eventID, setEventID] = useState<string | null>(null);
   const [eventToDelete, setEventToDelete] = useState<string | null>(null);
 
+  /**
+   * Exports all events in the current list as a JSON file.
+   */
+  const handleExportAll = () => {
+    if (events.length === 0) return;
+    const dataStr = JSON.stringify(events, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const exportFileDefaultName = `events_${new Date().toISOString().split('T')[0]}.json`;
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  /**
+   * Handles importing events from a JSON file.
+   */
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedData = JSON.parse(event.target?.result as string);
+        const newEventsArray = Array.isArray(importedData) ? importedData : [importedData];
+        
+        // Basic validation - check if it looks like EventData
+        const isValid = newEventsArray.every(ev => ev.teams && ev.dances && ev.judges);
+        if (!isValid) {
+          alert("Invalid file format. Please ensure the file contains valid event data.");
+          return;
+        }
+
+        await addEvents(newEventsArray);
+        alert(`Successfully imported ${newEventsArray.length} event(s).`);
+      } catch (err) {
+        console.error('Error importing events:', err);
+        alert("Error parsing JSON file. Please check the file content.");
+      }
+    };
+    reader.readAsText(file);
+    // Reset input value to allow importing same file again if needed
+    e.target.value = '';
+  };
+
   // Derive teams, dances, and judges directly from events array and eventID
   const selectedEvent = events.find((e) => e.id === eventID);
   const teams: Team[] = selectedEvent?.teams || [];
@@ -62,6 +109,19 @@ export default function EventsDashboard({ id }: { id?: string }) {
   > = selectedEvent?.finalized || {};
   const releasedDances: Record<string, boolean> =
     selectedEvent?.releasedDances || {};
+
+  /**
+   * Exports a single event as a JSON file.
+   */
+  const handleExportEvent = (event: EventData) => {
+    const dataStr = JSON.stringify(event, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const exportFileDefaultName = `event_${event.name?.replace(/\s+/g, '_') || event.id}.json`;
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
 
   /**
    * Handles the creation of a new event in the events array.
@@ -126,12 +186,36 @@ export default function EventsDashboard({ id }: { id?: string }) {
           {session?.user &&
             ((session.user as SessionUser).role === 'Admin' ||
               (session.user as SessionUser).role === 'User') && eventID == null && (
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-md hover:shadow-lg transition-all"
-              >
-                <Icon name="Plus" className="mr-2 h-5 w-5" /> New Event
-              </button>
+              <>
+                <button
+                  onClick={handleExportAll}
+                  disabled={events.length === 0}
+                  className="inline-flex items-center px-4 py-2.5 border border-stone-200 text-sm font-medium rounded-full text-stone-700 bg-white hover:bg-stone-50 shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Icon name="Download" className="mr-2 h-5 w-5" /> Export All
+                </button>
+                <div className="relative">
+                  <input
+                    type="file"
+                    id="import-events"
+                    accept=".json"
+                    onChange={handleImport}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="import-events"
+                    className="inline-flex items-center px-4 py-2.5 border border-stone-200 text-sm font-medium rounded-full text-stone-700 bg-white hover:bg-stone-50 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                  >
+                    <Icon name="Upload" className="mr-2 h-5 w-5" /> Import
+                  </label>
+                </div>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-md hover:shadow-lg transition-all"
+                >
+                  <Icon name="Plus" className="mr-2 h-5 w-5" /> New Event
+                </button>
+              </>
             )}
           {session?.user &&
             ((session.user as SessionUser).role === 'Admin' ||
@@ -180,17 +264,30 @@ export default function EventsDashboard({ id }: { id?: string }) {
                         {event.name || 'Unnamed Event'}
                       </h2>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setEventToDelete(event.id);
-                      }}
-                      className="absolute top-6 right-6 p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                      title="Delete Event"
-                    >
-                      <Icon name="Trash2" className="h-5 w-5" />
-                    </button>
+                    <div className="absolute top-6 right-6 flex space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleExportEvent(event);
+                        }}
+                        className="p-2 text-stone-400 hover:text-violet-600 hover:bg-violet-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                        title="Export Event"
+                      >
+                        <Icon name="Download" className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEventToDelete(event.id);
+                        }}
+                        className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete Event"
+                      >
+                        <Icon name="Trash2" className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-6 grid grid-cols-3 gap-4 border-t border-stone-100 pt-6">
@@ -249,17 +346,30 @@ export default function EventsDashboard({ id }: { id?: string }) {
                       {event.name || 'Unnamed Event'}
                     </h2>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setEventToDelete(event.id);
-                    }}
-                    className="absolute top-6 right-6 p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                    title="Delete Event"
-                  >
-                    <Icon name="Trash2" className="h-5 w-5" />
-                  </button>
+                  <div className="absolute top-6 right-6 flex space-x-2">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleExportEvent(event);
+                      }}
+                      className="p-2 text-stone-400 hover:text-violet-600 hover:bg-violet-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                      title="Export Event"
+                    >
+                      <Icon name="Download" className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEventToDelete(event.id);
+                      }}
+                      className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                      title="Delete Event"
+                    >
+                      <Icon name="Trash2" className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-6 grid grid-cols-3 gap-4 border-t border-stone-100 pt-6">
