@@ -540,7 +540,7 @@ const ShowPlayingModal: React.FC<Props> = ({
           backgroundSize: 'cover',
         }}
       >
-        <div className="w-full h-full flex justify-start items-center">
+        <div className="w-screen h-full flex justify-center items-center">
           {mode === 'Video' && (
             <VideoPlayingComponent
               videoUri={videoUri.link}
