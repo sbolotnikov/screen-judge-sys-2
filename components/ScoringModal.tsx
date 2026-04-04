@@ -34,10 +34,19 @@ export default function ScoringPage({
   judgingFormat: JudgingFormat;
 }) {
   const { updateEvent, setCompID } = usePartySettings();
+  const [currentDanceId, setCurrentDanceId] = useState(selectedDanceId);
   const [localScores, setLocalScores] = useState<Record<string, ScoreValue>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [hasBackup, setHasBackup] = useState(false);
+
+  // Sync currentDanceId with selectedDanceId from props when it changes
+  // This allows the admin to still "force" a dance if they change it
+  useEffect(() => {
+    if (selectedDanceId) {
+      setCurrentDanceId(selectedDanceId);
+    }
+  }, [selectedDanceId]);
 
   useEffect(() => {
     if (partyID) {
@@ -46,7 +55,7 @@ export default function ScoringPage({
   }, [partyID, setCompID]);
 
   // Generate a unique key for backup based on party, event, dance, and judge
-  const backupKey = `scoring_backup_${partyID}_${id}_${selectedDanceId}_${currentJudgeId}`;
+  const backupKey = `scoring_backup_${partyID}_${id}_${currentDanceId}_${currentJudgeId}`;
 
   // Restore from backup on mount or when context changes
   useEffect(() => {
@@ -55,7 +64,7 @@ export default function ScoringPage({
       if (savedBackup) {
         try {
           const parsedBackup = JSON.parse(savedBackup);
-          const dbScores = scores[selectedDanceId]?.[currentJudgeId] || {};
+          const dbScores = scores[currentDanceId]?.[currentJudgeId] || {};
           
           // Only restore if backup is different from DB to avoid redundant alerts
           if (JSON.stringify(parsedBackup) !== JSON.stringify(dbScores)) {
@@ -70,11 +79,11 @@ export default function ScoringPage({
       }
       
       // If no backup or backup matches DB, sync with current judge's scores for the selected dance from DB
-      const dbScores = scores[selectedDanceId]?.[currentJudgeId] || {};
+      const dbScores = scores[currentDanceId]?.[currentJudgeId] || {};
       setLocalScores(dbScores);
       setHasBackup(false);
     }
-  }, [selectedDanceId, currentJudgeId, scores, finalized, backupKey]);
+  }, [currentDanceId, currentJudgeId, scores, finalized, backupKey]);
 
   // Save to backup whenever localScores changes
   useEffect(() => {
@@ -91,12 +100,12 @@ export default function ScoringPage({
     localStorage.removeItem(backupKey);
     setHasBackup(false);
     // Re-sync with DB
-    const dbScores = scores[selectedDanceId]?.[currentJudgeId] || {};
+    const dbScores = scores[currentDanceId]?.[currentJudgeId] || {};
     setLocalScores(dbScores);
   };
 
   const isFinalized = (judgeId: string) => {
-    return finalized?.[selectedDanceId]?.[judgeId] === true;
+    return finalized?.[currentDanceId]?.[judgeId] === true;
   };
 
   /**
@@ -199,18 +208,18 @@ export default function ScoringPage({
     setIsSaving(true);
     try {
       const newScores = JSON.parse(JSON.stringify(scores || {}));
-      if (!newScores[selectedDanceId]) newScores[selectedDanceId] = {};
+      if (!newScores[currentDanceId]) newScores[currentDanceId] = {};
       
       // The user requested the end result to be an array of couples with placements.
       // However, the app's standard storage is a Record. 
       // We will store the Record for compatibility, but we can also store the array 
       // if we want to satisfy the prompt's specific phrasing.
       // For now, let's keep the Record but ensure ALL teams are assigned if it's a Final.
-      newScores[selectedDanceId][currentJudgeId] = localScores;
+      newScores[currentDanceId][currentJudgeId] = localScores;
 
       const newFinalized = JSON.parse(JSON.stringify(finalized || {}));
-      if (!newFinalized[selectedDanceId]) newFinalized[selectedDanceId] = {};
-      newFinalized[selectedDanceId][currentJudgeId] = true;
+      if (!newFinalized[currentDanceId]) newFinalized[currentDanceId] = {};
+      newFinalized[currentDanceId][currentJudgeId] = true;
 
       await updateEvent(id, {
         scores: newScores,
@@ -246,6 +255,21 @@ export default function ScoringPage({
     }
   };
 
+  const nextDanceId = (() => {
+    const currentIndex = dances.findIndex(d => d.id === currentDanceId);
+    if (currentIndex !== -1 && currentIndex < dances.length - 1) {
+      return dances[currentIndex + 1].id;
+    }
+    return null;
+  })();
+
+  const handleNextDance = () => {
+    if (nextDanceId) {
+      setCurrentDanceId(nextDanceId);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   if (judges.length === 0 || dances.length === 0 || teams.length === 0) {
     return (
       <div className="text-center py-20 bg-white rounded-3xl shadow-sm border border-stone-200">
@@ -275,8 +299,21 @@ export default function ScoringPage({
               : 'Rank the teams from 1st to last place.'}
           </p>
         </div>
-        <div className="bg-violet-100 text-violet-800 px-4 py-2 rounded-2xl text-sm font-bold border border-violet-200">
-          Format: {judgingFormat}
+        <div className="flex items-center gap-3">
+          <div className="bg-violet-100 text-violet-800 px-4 py-2 rounded-2xl text-sm font-bold border border-violet-200">
+            Format: {judgingFormat}
+          </div>
+          <select 
+            value={currentDanceId}
+            onChange={(e) => setCurrentDanceId(e.target.value)}
+            className="bg-white border border-stone-200 text-stone-900 text-sm font-bold rounded-2xl px-4 py-2 focus:ring-violet-500 focus:border-violet-500"
+          >
+            {dances.map(dance => (
+              <option key={dance.id} value={dance.id}>
+                {dance.name} {finalized?.[dance.id]?.[currentJudgeId] ? '✓' : ''}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -325,6 +362,14 @@ export default function ScoringPage({
             </div>
             
             <div className="flex items-center space-x-4">
+              {isFinalized(judge.id) && nextDanceId && (
+                <button
+                  onClick={handleNextDance}
+                  className="inline-flex items-center px-6 py-2.5 border border-violet-200 text-sm font-bold rounded-full text-violet-700 bg-violet-50 hover:bg-violet-100 shadow-sm transition-all"
+                >
+                  Next Dance <Icon name="ChevronRight" className="ml-2 h-4 w-4" />
+                </button>
+              )}
               {!isFinalized(judge.id) && allTeamsMarked && (
                 <button
                   onClick={handleFinalize}
@@ -339,7 +384,7 @@ export default function ScoringPage({
           </div>
 
           <div className="divide-y divide-stone-100">
-            {dances.filter((dance) => dance.id === selectedDanceId).map((dance) => (
+            {dances.filter((dance) => dance.id === currentDanceId).map((dance) => (
               <div key={dance.id} className="px-6 py-8">
                 <h3 className="text-xl font-bold text-stone-800 mb-8 flex items-center">
                   <span className="w-2 h-6 bg-violet-500 rounded-full mr-3"></span>
