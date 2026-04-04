@@ -37,6 +37,7 @@ export default function ScoringPage({
   const [localScores, setLocalScores] = useState<Record<string, ScoreValue>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [hasBackup, setHasBackup] = useState(false);
 
   useEffect(() => {
     if (partyID) {
@@ -44,13 +45,55 @@ export default function ScoringPage({
     }
   }, [partyID, setCompID]);
 
-  // Sync with current judge's scores for the selected dance from DB (only if not finalized)
+  // Generate a unique key for backup based on party, event, dance, and judge
+  const backupKey = `scoring_backup_${partyID}_${id}_${selectedDanceId}_${currentJudgeId}`;
+
+  // Restore from backup on mount or when context changes
   useEffect(() => {
     if (currentJudgeId && !isFinalized(currentJudgeId)) {
+      const savedBackup = localStorage.getItem(backupKey);
+      if (savedBackup) {
+        try {
+          const parsedBackup = JSON.parse(savedBackup);
+          const dbScores = scores[selectedDanceId]?.[currentJudgeId] || {};
+          
+          // Only restore if backup is different from DB to avoid redundant alerts
+          if (JSON.stringify(parsedBackup) !== JSON.stringify(dbScores)) {
+            console.log('Restoring scoring backup:', parsedBackup);
+            setLocalScores(parsedBackup);
+            setHasBackup(true);
+            return;
+          }
+        } catch (e) {
+          console.error('Failed to parse scoring backup', e);
+        }
+      }
+      
+      // If no backup or backup matches DB, sync with current judge's scores for the selected dance from DB
       const dbScores = scores[selectedDanceId]?.[currentJudgeId] || {};
       setLocalScores(dbScores);
+      setHasBackup(false);
     }
-  }, [selectedDanceId, currentJudgeId, scores, finalized]); 
+  }, [selectedDanceId, currentJudgeId, scores, finalized, backupKey]);
+
+  // Save to backup whenever localScores changes
+  useEffect(() => {
+    if (Object.keys(localScores).length > 0 && !isFinalized(currentJudgeId)) {
+      localStorage.setItem(backupKey, JSON.stringify(localScores));
+    } else if (isFinalized(currentJudgeId)) {
+      // Clear backup if finalized
+      localStorage.removeItem(backupKey);
+      setHasBackup(false);
+    }
+  }, [localScores, backupKey, currentJudgeId]);
+
+  const clearBackup = () => {
+    localStorage.removeItem(backupKey);
+    setHasBackup(false);
+    // Re-sync with DB
+    const dbScores = scores[selectedDanceId]?.[currentJudgeId] || {};
+    setLocalScores(dbScores);
+  };
 
   const isFinalized = (judgeId: string) => {
     return finalized?.[selectedDanceId]?.[judgeId] === true;
@@ -173,6 +216,7 @@ export default function ScoringPage({
         scores: newScores,
         finalized: newFinalized
       });
+      localStorage.removeItem(backupKey);
     } catch (err) {
       console.error('Error finalizing scores:', err);
       alert('Failed to save. Please try again.');
@@ -266,19 +310,32 @@ export default function ScoringPage({
                     <Icon name="Award" className="h-3 w-3 mr-1" /> Results Finalized
                   </span>
                 )}
+                {!isFinalized(judge.id) && hasBackup && (
+                  <span className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center mt-1">
+                    <Icon name="Activity" className="h-3 w-3 mr-1" /> Backup Restored
+                    <button 
+                      onClick={clearBackup}
+                      className="ml-2 text-[10px] bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded text-amber-800 transition-colors"
+                    >
+                      Reset to DB
+                    </button>
+                  </span>
+                )}
               </div>
             </div>
             
-            {!isFinalized(judge.id) && allTeamsMarked && (
-              <button
-                onClick={handleFinalize}
-                disabled={isSaving}
-                className="inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-bold rounded-full text-white bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-all disabled:opacity-50"
-              >
-                <Icon name="Award" className="mr-2 h-4 w-4" /> 
-                {isSaving ? 'Saving...' : 'Finalize & Send Results'}
-              </button>
-            )}
+            <div className="flex items-center space-x-4">
+              {!isFinalized(judge.id) && allTeamsMarked && (
+                <button
+                  onClick={handleFinalize}
+                  disabled={isSaving}
+                  className="inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-bold rounded-full text-white bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+                >
+                  <Icon name="Award" className="mr-2 h-4 w-4" /> 
+                  {isSaving ? 'Saving...' : 'Finalize & Send Results'}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="divide-y divide-stone-100">
