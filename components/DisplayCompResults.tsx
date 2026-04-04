@@ -412,10 +412,11 @@ function OriginalResults({
         />
         <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
           <div className="relative pt-10 pb-14 px-6 border-2 border-dashed border-stone-200 rounded-3xl bg-stone-50/50 overflow-hidden">
+            <StartLine />
             <FinishLine />
             <div className="space-y-8 relative z-10">
               {teamScores.map((team) => {
-                const percentage = (team.score / maxActualScore) * 88;
+                const percentage = (team.score / maxActualScore) * 75 + 10;
                 return (
                   <div
                     key={team.id}
@@ -476,14 +477,44 @@ function ResultsHeader({
 
 function FinishLine() {
   return (
-    <div className="absolute right-10 top-0 bottom-0 w-3 bg-red-500 z-0 flex flex-col items-center justify-center opacity-40">
+    <div className="absolute right-5 top-0 bottom-0 w-12 bg-gray-300 z-0 flex flex-col items-center justify-around opacity-50 overflow-hidden py-4">
       <div
-        className="h-full w-full"
+        className="h-full w-full absolute inset-0"
         style={{
           backgroundImage:
             'repeating-linear-gradient(45deg, transparent, transparent 10px, white 10px, white 20px)',
         }}
       ></div>
+      {Array.from({ length: 15 }).map((_, i) => (
+        <span
+          key={i}
+          className="relative z-10 text-5xl m-5 font-black text-red-600 [writing-mode:vertical-rl] rotate-180"
+        >
+          FINISH
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function StartLine() {
+  return (
+    <div className="absolute left-5 top-0 bottom-0 w-12 bg-gray-300 z-0 flex flex-col items-center justify-around opacity-50 overflow-hidden py-4">
+      <div
+        className="h-full w-full absolute inset-0"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(45deg, transparent, transparent 10px, white 10px, white 20px)',
+        }}
+      ></div>
+      {Array.from({ length: 15 }).map((_, i) => (
+        <span
+          key={i}
+          className="relative z-10 text-5xl m-5 font-black text-blue-600 [writing-mode:vertical-rl] rotate-180"
+        >
+          START
+        </span>
+      ))}
     </div>
   );
 }
