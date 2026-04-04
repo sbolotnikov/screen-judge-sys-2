@@ -219,7 +219,7 @@ export default function ScoringPage({
   const unrankedTeams = teams.filter(t => localScores[t.id] === null || localScores[t.id] === undefined);
 
   return (
-    <div className="space-y-10 pb-12">
+    <div className="space-y-10 pb-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-extrabold text-stone-900 tracking-tight">
@@ -290,7 +290,7 @@ export default function ScoringPage({
                 </h3>
 
                 {judgingFormat === 'Original' ? (
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {teams.map((team) => {
                       const currentScore = localScores[team.id] || null;
                       const isJudgeFinalized = isFinalized(judge.id);
@@ -298,7 +298,7 @@ export default function ScoringPage({
                       return (
                         <div
                           key={team.id}
-                          className="border border-stone-200 rounded-2xl p-5 flex flex-col items-center space-y-4 bg-white hover:shadow-md transition-shadow"
+                          className="border border-stone-200 rounded-2xl p-3 flex flex-col items-center space-y-4 bg-white hover:shadow-md transition-shadow"
                           style={{
                             borderTopColor: team.color,
                             borderTopWidth: '6px',

@@ -464,7 +464,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
         </div>
       )}
       {eventID && user?.role === 'Judge' && (
-        <div className="mt-8 w-full">
+        <div className="mt-1 w-full">
           <ScoringPage
             partyID={id!}
             id={eventID}
