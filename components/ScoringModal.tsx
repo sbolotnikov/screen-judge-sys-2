@@ -33,10 +33,11 @@ export default function ScoringPage({
   currentJudgeId: string;
   judgingFormat: JudgingFormat;
 }) {
-  const { updateEvent, setCompID } = usePartySettings();
+  const { setCompID } = usePartySettings();
   const [currentDanceId, setCurrentDanceId] = useState(selectedDanceId);
   const [localScores, setLocalScores] = useState<Record<string, ScoreValue>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [hasBackup, setHasBackup] = useState(false);
 
@@ -206,29 +207,48 @@ export default function ScoringPage({
     }
 
     setIsSaving(true);
+    setSaveError(null);
     try {
-      const newScores = JSON.parse(JSON.stringify(scores || {}));
-      if (!newScores[currentDanceId]) newScores[currentDanceId] = {};
-      
-      // The user requested the end result to be an array of couples with placements.
-      // However, the app's standard storage is a Record. 
-      // We will store the Record for compatibility, but we can also store the array 
-      // if we want to satisfy the prompt's specific phrasing.
-      // For now, let's keep the Record but ensure ALL teams are assigned if it's a Final.
-      newScores[currentDanceId][currentJudgeId] = localScores;
+      // Keep an immutable copy for every retry. The local backup is deliberately
+      // retained until the API confirms that these exact marks are in MongoDB.
+      const submittedScores = JSON.parse(JSON.stringify(localScores));
+      const maxAttempts = 3;
+      let lastError: Error | null = null;
 
-      const newFinalized = JSON.parse(JSON.stringify(finalized || {}));
-      if (!newFinalized[currentDanceId]) newFinalized[currentDanceId] = {};
-      newFinalized[currentDanceId][currentJudgeId] = true;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const response = await fetch('/api/scoring/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              partyId: partyID,
+              eventId: id,
+              danceId: currentDanceId,
+              judgeId: currentJudgeId,
+              scores: submittedScores,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok || result.verified !== true) {
+            throw new Error(result.error || 'The saved marks could not be verified');
+          }
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error('Unknown save error');
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+        }
+      }
 
-      await updateEvent(id, {
-        scores: newScores,
-        finalized: newFinalized
-      });
+      if (lastError) throw lastError;
       localStorage.removeItem(backupKey);
+      setHasBackup(false);
     } catch (err) {
       console.error('Error finalizing scores:', err);
-      alert('Failed to save. Please try again.');
+      setSaveError('Marks were not confirmed in the database. Your backup is safe; please submit again.');
+      alert('Marks were not confirmed in the database. Your backup is safe; please submit again.');
     } finally {
       setIsSaving(false);
     }
@@ -356,6 +376,11 @@ export default function ScoringPage({
                     >
                       Reset to DB
                     </button>
+                  </span>
+                )}
+                {saveError && (
+                  <span className="text-xs font-bold text-red-600 mt-1 block" role="alert">
+                    {saveError}
                   </span>
                 )}
               </div>
