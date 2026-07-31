@@ -32,6 +32,8 @@ export default function EventsDashboard({ id }: { id?: string }) {
     setCompID,
     selectedDanceId,
     selectedDanceIdJudge,
+    colorBG,
+    textColor,
   } = usePartySettings();
 
   useEffect(() => {
@@ -460,6 +462,8 @@ export default function EventsDashboard({ id }: { id?: string }) {
             releasedDances={releasedDances}
             finalized={finalized}
             isAnimationOn={false}
+            colorBG={colorBG}
+            textColor={textColor}
           />
         </div>
       )}

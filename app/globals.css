@@ -503,3 +503,50 @@ body {
   backface-visibility: 'hidden';
   -webkit-backface-visibility: 'hidden'; /* Safari */
 }
+
+/* Event-results panels inherit the competition palette. */
+.display-comp-results {
+  color: var(--results-text);
+  background-color: var(--results-bg);
+}
+.display-comp-results :is(
+  .bg-white,
+  [class~='bg-stone-50'],
+  [class~='bg-stone-50/50']
+) {
+  background-color: color-mix(in srgb, var(--results-bg) 94%, var(--results-text)) !important;
+}
+.display-comp-results :is(
+  .bg-stone-100,
+  [class~='bg-stone-100/50'],
+  .bg-stone-200,
+  .bg-gray-300
+) {
+  background-color: color-mix(in srgb, var(--results-bg) 82%, var(--results-text)) !important;
+}
+.display-comp-results :is(
+  .bg-violet-50,
+  [class~='bg-violet-50/50'],
+  .bg-violet-100,
+  .bg-violet-600
+) {
+  background-color: color-mix(in srgb, var(--results-bg) 68%, var(--results-text)) !important;
+}
+.display-comp-results [class*='text-stone-'],
+.display-comp-results [class*='text-gray-'],
+.display-comp-results [class*='text-violet-'],
+.display-comp-results [class*='text-emerald-'],
+.display-comp-results [class*='text-amber-'],
+.display-comp-results [class*='text-red-'],
+.display-comp-results [class*='text-blue-'],
+.display-comp-results .text-white {
+  color: var(--results-text) !important;
+}
+.display-comp-results [class*='border-stone-'],
+.display-comp-results [class*='border-violet-'],
+.display-comp-results .border-white {
+  border-color: color-mix(in srgb, var(--results-bg) 65%, var(--results-text)) !important;
+}
+.display-comp-results :is(.hover\:bg-stone-50, [class~='hover:bg-violet-50/50']):hover {
+  background-color: color-mix(in srgb, var(--results-bg) 75%, var(--results-text)) !important;
+}

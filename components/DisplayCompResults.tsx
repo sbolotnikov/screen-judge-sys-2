@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, type CSSProperties } from 'react';
 import { animate } from 'framer-motion';
 import {
   Dance,
@@ -21,6 +21,17 @@ import {
 } from '@/services/skatingSystem';
 import SkatingBreakdown from './SkatingBreakdown';
 
+type ResultsThemeProps = {
+  colorBG?: string;
+  textColor?: string;
+};
+
+const resultsTheme = (colorBG = '#ffffff', textColor = '#1c1917') =>
+  ({
+    '--results-bg': colorBG || '#ffffff',
+    '--results-text': textColor || '#1c1917',
+  }) as CSSProperties;
+
 export default function DisplayCompResults(props: {
   name: string;
   scores: EventData['scores'];
@@ -32,7 +43,7 @@ export default function DisplayCompResults(props: {
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
   isAnimationOn?: boolean;
-}) {
+} & ResultsThemeProps) {
   if (props.judgingFormat === 'Final') {
     return <FinalResultsSkating {...props} />;
   }
@@ -136,6 +147,8 @@ function FinalResultsSkating({
   finalized = {},
   releasedDances = {},
   isAnimationOn = true,
+  colorBG,
+  textColor,
 }: {
   name: string;
   scores: EventData['scores'];
@@ -146,7 +159,7 @@ function FinalResultsSkating({
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
   isAnimationOn?: boolean;
-}) {
+} & ResultsThemeProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -259,7 +272,7 @@ function FinalResultsSkating({
   );
 
   if (dances.length === 0 || teamScores.length === 0) {
-    return <PendingResults />;
+    return <PendingResults colorBG={colorBG} textColor={textColor} />;
   }
 
   const maxRank = teams.length + 1;
@@ -267,7 +280,8 @@ function FinalResultsSkating({
   return (
     <div
       ref={scrollContainerRef}
-      className="w-full h-screen overflow-y-auto scrollbar-hide p-2"
+      className="display-comp-results w-full h-screen overflow-y-auto scrollbar-hide p-2"
+      style={resultsTheme(colorBG, textColor)}
     >
       <div ref={contentRef} className="space-y-8 pb-10">
         <ResultsHeader
@@ -309,6 +323,8 @@ function OriginalResults({
   finalized = {},
   releasedDances = {},
   isAnimationOn = true,
+  colorBG,
+  textColor,
 }: {
   name: string;
   scores: EventData['scores'];
@@ -319,7 +335,7 @@ function OriginalResults({
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
   isAnimationOn?: boolean;
-}) {
+} & ResultsThemeProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -392,7 +408,7 @@ function OriginalResults({
   );
 
   if (teamScores.length === 0) {
-    return <PendingResults />;
+    return <PendingResults colorBG={colorBG} textColor={textColor} />;
   }
 
   const maxActualScore = Math.max(...teamScores.map((t) => t.score), 1);
@@ -400,7 +416,8 @@ function OriginalResults({
   return (
     <div
       ref={scrollContainerRef}
-      className="w-full h-screen overflow-y-auto scrollbar-hide p-2"
+      className="display-comp-results w-full h-screen overflow-y-auto scrollbar-hide p-2"
+      style={resultsTheme(colorBG, textColor)}
     >
       <div ref={contentRef} className="space-y-8 pb-10">
         <ResultsHeader
@@ -438,7 +455,7 @@ function OriginalResults({
                         displayValue={team.rank.toString()}
                       />
                       <div className="-mt-4 bg-white px-3 py-1 rounded-full shadow-sm border border-stone-100 text-5xl font-bold text-stone-700 whitespace-nowrap">
-                        <span className='text-shadow-lg text-shadow-gray-500' style={{ color: team.color }}>{team.name}</span> (
+                        <span className="text-shadow-lg">{team.name}</span> (
                         {team.score} pts)
                       </div>
                     </motion.div>
@@ -613,7 +630,7 @@ function LeaderboardTable({
                     />
                   )}
                 </div>
-                <p className='text-shadow-lg text-shadow-gray-500 text-5xl font-bold' style={{ color: team.color }}>{team.name}</p>
+                <p className="text-shadow-lg text-5xl font-bold">{team.name}</p>
               </div>
             </div>
             <div className="flex items-center">
@@ -628,9 +645,12 @@ function LeaderboardTable({
   );
 }
 
-function PendingResults() {
+function PendingResults({ colorBG, textColor }: ResultsThemeProps) {
   return (
-    <div className="text-center py-20 bg-white rounded-3xl shadow-sm border border-stone-200">
+    <div
+      className="display-comp-results text-center py-20 bg-white rounded-3xl shadow-sm border border-stone-200"
+      style={resultsTheme(colorBG, textColor)}
+    >
       <div className="mx-auto w-20 h-20 bg-stone-50 rounded-full flex items-center justify-center mb-4">
         <Icon
           name="Activity"

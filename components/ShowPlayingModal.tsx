@@ -566,6 +566,8 @@ const ShowPlayingModal: React.FC<Props> = ({
                 releasedDances={currentEvent.releasedDances || {}}
                 finalized={currentEvent.finalized || {}}
                 isAnimationOn={true}
+                colorBG={colorBG}
+                textColor={textColor}
               />
             );
           })()}
