@@ -55,6 +55,7 @@ export interface Placement {
   marks: number[];
   majorityCount: number;
   majoritySum: number;
+  decisionColumn?: number;
   isTie?: boolean;
 }
 
@@ -67,6 +68,7 @@ export interface FinalResult {
     rank: number;
     isTie: boolean;
   };
+  rule11Contested?: boolean;
   rule11Resolution?: {
     placementsAsMarks: number[];
     tieBreakRank: number;
@@ -76,4 +78,3 @@ export interface FinalResult {
 }
 
 export type Rankings = Record<string, Record<string, Record<string, number>>>;
-

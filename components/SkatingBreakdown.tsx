@@ -60,19 +60,21 @@ export default function SkatingBreakdown({
       };
     }
 
+    if (result.rule11Contested) {
+      return {
+        label: result.rule11Resolution ? "Rule 11 Resolved" : "Rule 11 Applied",
+        color: "text-violet-600",
+        desc: result.rule11Resolution
+          ? "Rule 10 remained tied; placement was resolved using the pooled Rule 11 marks."
+          : "Couple was contested under Rule 11 before the remaining places returned to Rule 10."
+      };
+    }
+
     if (result.rule10Resolution && !result.rule10Resolution.isTie) {
       return { 
         label: "Rule 10 Resolved", 
         color: "text-emerald-600", 
         desc: "Initially tied on sum; resolved via Rule 10 (Placement Counts)." 
-      };
-    }
-
-    if (result.rule11Resolution) {
-      return { 
-        label: "Tie Resolved", 
-        color: "text-violet-600", 
-        desc: "Initially tied on sum; resolved via Rule 11 or Grand Tabulation." 
       };
     }
 
@@ -91,7 +93,8 @@ export default function SkatingBreakdown({
     colHeaders: string[], 
     rowPlacements: any[], 
     marksSource: Record<string, number[]>,
-    majority: number
+    majority: number,
+    showAllPlacementColumns: boolean = false
   ) => {
     return (
       <div className="mb-10">
@@ -114,9 +117,10 @@ export default function SkatingBreakdown({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
-              {rowPlacements.sort((a,b) => (a.rank || a.finalRank) - (b.rank || b.finalRank)).map(r => {
+              {[...rowPlacements].sort((a,b) => (a.rank || a.finalRank) - (b.rank || b.finalRank)).map(r => {
                 const rankValue = r.rank || r.finalRank;
                 const baseRank = Math.floor(rankValue);
+                const lastUsedColumn = r.decisionColumn ?? baseRank;
                 const marks = marksSource[r.coupleId] || [];
                 return (
                   <tr key={r.coupleId} className="hover:bg-white group">
@@ -129,18 +133,18 @@ export default function SkatingBreakdown({
                     {Array.from({length: teams.length}, (_, i) => {
                       const colRank = i + 1;
                       const data = getTabulationData(r.coupleId, colRank, marksSource);
-                      const isAfterPlaced = colRank > baseRank;
+                      const isAfterPlaced = !showAllPlacementColumns && colRank > lastUsedColumn;
                       const hasMajority = data.count >= majority;
 
                       return (
                         <td 
                           key={i} 
-                          className={`p-2 border border-stone-200 transition-all ${isAfterPlaced ? 'opacity-20 bg-stone-50' : hasMajority ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-stone-400'}`}
+                          className={`p-2 border border-stone-200 transition-all ${isAfterPlaced ? 'opacity-20 bg-stone-50' : hasMajority ? 'bg-emerald-50/40 text-emerald-700 font-bold' : 'text-stone-400'}`}
                         >
                           {!isAfterPlaced && (
                             <div className="flex flex-col items-center">
                               <span>{data.count}</span>
-                              {hasMajority && <span className="text-[8px] opacity-60">({data.sum})</span>}
+                              {(showAllPlacementColumns || hasMajority) && <span className="text-[8px] opacity-60">({data.sum})</span>}
                             </div>
                           )}
                         </td>
@@ -318,7 +322,7 @@ export default function SkatingBreakdown({
                             <th key={d.id} className="p-2 bg-white border border-stone-200">{d.name.substring(0,3)}</th>
                           ))}
                           {Array.from({length: teams.length}, (_, i) => (
-                            <th key={i} className="p-2 bg-emerald-50 text-emerald-700 border border-stone-200">1-{i+1}</th>
+                            <th key={i} className="p-2 bg-stone-100 text-violet-600 border border-stone-200">1-{i+1}</th>
                           ))}
                           <th className="p-2 bg-violet-50 text-violet-900 rounded-tr-xl border border-stone-200">Sum</th>
                         </tr>
@@ -337,7 +341,7 @@ export default function SkatingBreakdown({
                                 const count = marks.filter(m => m <= colRank).length;
                                 const sum = marks.filter(m => m <= colRank).reduce((a, b) => a + b, 0);
                                 return (
-                                  <td key={i} className="p-2 border border-stone-200 text-stone-600">
+                                  <td key={i} className="p-2 border border-stone-200 text-stone-600 bg-white">
                                     <div className="flex flex-col items-center">
                                       <span>{count}</span>
                                       <span className="text-[8px] opacity-40">({sum})</span>
@@ -366,15 +370,18 @@ export default function SkatingBreakdown({
                   )}
                 </div> */}
 
-                <div className="mt-10">
+                {results.some(result => result.rule11Contested) && <div className="mt-10">
                   {renderTabulationTable(
                     "Rule 11: Grand Tabulation: All Marks Pool", 
-                    Array.from({length: Math.min(10, released.length * judges.length)}, (_, i) => `M${i+1}`).concat(released.length * judges.length > 10 ? ['...'] : []), 
-                    results, 
+                    released.flatMap((dance, danceIndex) =>
+                      judges.map((_, judgeIndex) => `D${danceIndex + 1}-J${judgeIndex + 1}`)
+                    ),
+                    results.filter(result => result.rule11Contested),
                     getGrandTabulationSource(),
-                    Math.floor((released.length * judges.length) / 2) + 1
+                    Math.floor((released.length * judges.length) / 2) + 1,
+                    true
                   )}
-                </div>
+                </div>}
               </>
             )}
           </div>

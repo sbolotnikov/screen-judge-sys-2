@@ -13,12 +13,15 @@ export const performSkatingLogic = (
   coupleMarks: Record<string, number[]>,
   couples: { id: string }[],
   totalMarksPerCouple: number,
-  startRank: number
+  startRank: number,
+  maxPlacementColumn: number = couples.length,
+  startPlacementColumn: number = 1
 ): Placement[] => {
   // A "Majority" is defined as more than half of the judges (e.g., 2 out of 3, 3 out of 5).
   const majority = Math.floor(totalMarksPerCouple / 2) + 1;
   const placements: Placement[] = [];
   const placedCouples = new Set<string>();
+  const lastComparedColumn: Record<string, number> = {};
   let nextRankToAssign = startRank;
 
   // We continue until every couple has been assigned a placement.
@@ -28,11 +31,15 @@ export const performSkatingLogic = (
 
     let foundWinner = false;
 
-    for (let currentColumn = 1; currentColumn <= couples.length; currentColumn++) {
+    // Once a place is awarded, the next couple must be tested from the next
+    // occupied place (e.g. after awarding 4th, begin the next pass at 1-5).
+    const firstColumnForThisPlace = Math.max(startPlacementColumn, Math.ceil(nextRankToAssign));
+    for (let currentColumn = firstColumnForThisPlace; currentColumn <= maxPlacementColumn; currentColumn++) {
       let candidates: { coupleId: string; majorityCount: number; majoritySum: number }[] = [];
 
       // Check each unplaced couple to see if they have a majority in the current column range.
       for (const couple of unplacedCouples) {
+        lastComparedColumn[couple.id] = Math.max(lastComparedColumn[couple.id] ?? 0, currentColumn);
         const marks = coupleMarks[couple.id];
         const majorityMarks = getMarksForMajority(marks, currentColumn);
         if (majorityMarks.length >= majority) {
@@ -51,14 +58,20 @@ export const performSkatingLogic = (
         });
 
         const best = candidates[0];
+        let decisionColumn = currentColumn;
         let tiedWinners = candidates.filter(c => 
           c.majorityCount === best.majorityCount && 
           c.majoritySum === best.majoritySum
         );
 
         if (tiedWinners.length > 1) {
-          for (let nextCol = currentColumn + 1; nextCol <= couples.length; nextCol++) {
+          for (let nextCol = currentColumn + 1; nextCol <= maxPlacementColumn; nextCol++) {
+            decisionColumn = nextCol;
             const nextCheck = tiedWinners.map(tw => {
+              lastComparedColumn[tw.coupleId] = Math.max(
+                lastComparedColumn[tw.coupleId] ?? 0,
+                nextCol
+              );
               const marks = coupleMarks[tw.coupleId];
               const majorityMarks = getMarksForMajority(marks, nextCol);
               return {
@@ -87,18 +100,22 @@ export const performSkatingLogic = (
         }
 
         const numWinners = tiedWinners.length;
-        const finalRankValue = numWinners > 1 
-          ? nextRankToAssign + (1 / numWinners)
+        const finalRankValue = numWinners > 1
+          ? nextRankToAssign + ((numWinners - 1) / 2)
           : nextRankToAssign;
 
         tiedWinners.forEach(winner => {
-          const original = candidates.find(c => c.coupleId === winner.coupleId)!;
+          const decidingMarks = getMarksForMajority(
+            coupleMarks[winner.coupleId],
+            decisionColumn
+          );
           placements.push({
             coupleId: winner.coupleId,
             rank: finalRankValue,
             marks: coupleMarks[winner.coupleId].sort((a, b) => a - b),
-            majorityCount: original.majorityCount,
-            majoritySum: original.majoritySum,
+            majorityCount: decidingMarks.length,
+            majoritySum: decidingMarks.reduce((a, b) => a + b, 0),
+            decisionColumn: Math.max(decisionColumn, lastComparedColumn[winner.coupleId] ?? 0),
             isTie: numWinners > 1,
           });
           placedCouples.add(winner.coupleId);
@@ -118,6 +135,7 @@ export const performSkatingLogic = (
           marks: coupleMarks[c.id].sort((a, b) => a - b),
           majorityCount: 0,
           majoritySum: 0,
+          decisionColumn: lastComparedColumn[c.id] ?? maxPlacementColumn,
         });
         placedCouples.add(c.id);
         nextRankToAssign++;
@@ -155,48 +173,26 @@ export const calculateDancePlacements = (
 /**
  * MULTI-DANCE RULE 10 (Tie-breaking based on dance placements)
  */
-const resolveMultiDanceTieRule10 = (
+const getRule10Leaders = (
   group: any[],
   dances: string[],
-  startRank: number,
-  maxPlace: number
-): { coupleId: string; rank: number; isTie: boolean }[] => {
-  if (group.length === 0) return [];
-  if (group.length === 1) return [{ coupleId: group[0].coupleId, rank: startRank, isTie: false }];
+  placeUnderReview: number
+): string[] => {
+  const stats = group.map(c => {
+    const betterMarks = dances
+      .map(d => c.dancePlacements[d])
+      .filter(m => m <= placeUnderReview);
+    return {
+      coupleId: c.coupleId,
+      count: betterMarks.length,
+      sum: betterMarks.reduce((a, b) => a + b, 0),
+    };
+  }).sort((a, b) => b.count - a.count || a.sum - b.sum);
 
-  for (let p = 1; p <= maxPlace; p++) {
-    const stats = group.map(c => {
-      const marks = dances.map(d => c.dancePlacements[d]);
-      const betterMarks = marks.filter(m => m <= p);
-      return { 
-        coupleId: c.coupleId, 
-        count: betterMarks.length, 
-        sum: betterMarks.reduce((a, b) => a + b, 0) 
-      };
-    });
-
-    stats.sort((a, b) => {
-      if (a.count !== b.count) return b.count - a.count;
-      return a.sum - b.sum;
-    });
-
-    const best = stats[0];
-    const winners = stats.filter(s => s.count === best.count && s.sum === best.sum);
-
-    if (winners.length < group.length) {
-      const winnerIds = winners.map(w => w.coupleId);
-      const winnerGroup = group.filter(c => winnerIds.includes(c.coupleId));
-      const loserGroup = group.filter(c => !winnerIds.includes(c.coupleId));
-
-      return [
-        ...resolveMultiDanceTieRule10(winnerGroup, dances, startRank, maxPlace),
-        ...resolveMultiDanceTieRule10(loserGroup, dances, startRank + winners.length, maxPlace)
-      ];
-    }
-  }
-
-  const tieRank = startRank + (1 / group.length);
-  return group.map(c => ({ coupleId: c.coupleId, rank: tieRank, isTie: true }));
+  const best = stats[0];
+  return stats
+    .filter(s => s.count === best.count && s.sum === best.sum)
+    .map(s => s.coupleId);
 };
 
 /**
@@ -241,97 +237,95 @@ export const calculateFinalResults = (
     if (tiedGroup.length === 1) {
       finalResults.push({ ...tiedGroup[0], finalRank: startRank });
     } else {
-      const rule10Results = resolveMultiDanceTieRule10(tiedGroup, danceIds, startRank, couples.length);
-      
-      const r10Groups: Record<number, string[]> = {};
-      rule10Results.forEach(r => {
-        const rKey = Number(r.rank.toFixed(4)); // Use fixed precision for grouping
-        if (!r10Groups[rKey]) r10Groups[rKey] = [];
-        r10Groups[rKey].push(r.coupleId);
-      });
+      const rule11ContestedIds = new Set<string>();
+      const resolveRemainingTie = (group: typeof tiedGroup, placeUnderReview: number): void => {
+        if (group.length === 0) return;
+        if (group.length === 1) {
+          finalResults.push({
+            ...group[0],
+            finalRank: placeUnderReview,
+            rule10Resolution: { rank: placeUnderReview, isTie: false },
+            rule11Contested: rule11ContestedIds.has(group[0].coupleId),
+          });
+          return;
+        }
 
-      rule10Results.forEach(r10 => {
-        const original = tiedGroup.find(tg => tg.coupleId === r10.coupleId)!;
-        const groupAtThisRank = r10Groups[Number(r10.rank.toFixed(4))];
+        // Rule 10 considers only the overall place currently being awarded.
+        // It must not advance to a lower placement column to break this tie.
+        const rule10LeaderIds = getRule10Leaders(group, danceIds, placeUnderReview);
+        const rule10Leaders = group.filter(c => rule10LeaderIds.includes(c.coupleId));
 
-        if (groupAtThisRank.length === 1) {
+        if (rule10Leaders.length === 1) {
+          finalResults.push({
+            ...rule10Leaders[0],
+            finalRank: placeUnderReview,
+            rule10Resolution: { rank: placeUnderReview, isTie: false },
+            rule11Contested: rule11ContestedIds.has(rule10Leaders[0].coupleId),
+          });
+          resolveRemainingTie(
+            group.filter(c => c.coupleId !== rule10Leaders[0].coupleId),
+            placeUnderReview + 1
+          );
+          return;
+        }
+
+        // Rule 11 pools all marks only for the couples still tied by Rule 10.
+        const rule11Marks: Record<string, number[]> = {};
+        rule10Leaders.forEach(couple => {
+          rule11ContestedIds.add(couple.coupleId);
+          rule11Marks[couple.coupleId] = [];
+          danceIds.forEach(danceId => {
+            judges.forEach(jid => {
+              const mark = rawRankings[danceId]?.[jid]?.[couple.coupleId];
+              rule11Marks[couple.coupleId].push(
+                typeof mark === 'number' && mark > 0 ? mark : couples.length + 1
+              );
+            });
+          });
+        });
+
+        const rule11Placements = performSkatingLogic(
+          rule11Marks,
+          rule10Leaders.map(c => ({ id: c.coupleId })),
+          danceIds.length * judges.length,
+          placeUnderReview,
+          couples.length,
+          placeUnderReview
+        );
+        const winningRank = Math.min(...rule11Placements.map(p => p.rank));
+        // When the last two couples are tied, Rule 11 awards both occupied
+        // places. For larger groups it awards only the next place before the
+        // remaining couples return to Rule 10.
+        const rule11Winners = rule10Leaders.length === 2
+          ? rule11Placements
+          : rule11Placements.filter(p => p.rank === winningRank);
+        const winnerIds = new Set(rule11Winners.map(p => p.coupleId));
+
+        rule11Winners.forEach(p => {
+          const original = group.find(c => c.coupleId === p.coupleId)!;
           finalResults.push({
             ...original,
-            finalRank: r10.rank,
-            rule10Resolution: { rank: r10.rank, isTie: false }
+            finalRank: p.rank,
+            rule10Resolution: { rank: placeUnderReview, isTie: true },
+            rule11Contested: true,
+            rule11Resolution: {
+              placementsAsMarks: [...rule11Marks[p.coupleId]].sort((a,b) => a - b),
+              tieBreakRank: p.rank,
+              majorityCount: p.majorityCount,
+              majoritySum: p.majoritySum,
+            }
           });
-        } else {
-          const contestedCouples = tiedGroup.filter(tg => groupAtThisRank.includes(tg.coupleId));
-          const rule11Marks: Record<string, number[]> = {};
-          contestedCouples.forEach(cc => {
-            rule11Marks[cc.coupleId] = danceIds.map(d => cc.dancePlacements[d]);
-          });
+        });
 
-          const r11Placements = performSkatingLogic(
-            rule11Marks, 
-            contestedCouples.map(cc => ({ id: cc.coupleId })), 
-            danceIds.length, 
-            Math.floor(r10.rank)
-          );
+        // With more than two tied couples, Rule 11 awards only the position
+        // under review. All remaining couples go back to Rule 10.
+        resolveRemainingTie(
+          group.filter(c => !winnerIds.has(c.coupleId)),
+          placeUnderReview + rule11Winners.length
+        );
+      };
 
-          const rule11StillTied: Record<number, string[]> = {};
-          r11Placements.forEach(p => {
-            const pKey = Number(p.rank.toFixed(4));
-            if (!rule11StillTied[pKey]) rule11StillTied[pKey] = [];
-            rule11StillTied[pKey].push(p.coupleId);
-          });
-
-          const p = r11Placements.find(rp => rp.coupleId === r10.coupleId)!;
-          const r11GroupAtThisRank = rule11StillTied[Number(p.rank.toFixed(4))];
-
-          if (r11GroupAtThisRank.length === 1) {
-            finalResults.push({
-              ...original,
-              finalRank: p.rank,
-              rule10Resolution: { rank: r10.rank, isTie: true },
-              rule11Resolution: {
-                placementsAsMarks: rule11Marks[p.coupleId].sort((a,b)=>a-b),
-                tieBreakRank: p.rank,
-                majorityCount: p.majorityCount,
-                majoritySum: p.majoritySum,
-              }
-            });
-          } else {
-            const grandContestedCouples = contestedCouples.filter(cc => r11GroupAtThisRank.includes(cc.coupleId));
-            const grandMarks: Record<string, number[]> = {};
-            grandContestedCouples.forEach(cc => {
-              grandMarks[cc.coupleId] = [];
-              danceIds.forEach(danceId => {
-                judges.forEach(jid => {
-                  const m = rawRankings[danceId]?.[jid]?.[cc.coupleId];
-                  grandMarks[cc.coupleId].push(typeof m === 'number' ? m : couples.length + 1);
-                });
-              });
-            });
-
-            const grandPlacements = performSkatingLogic(
-              grandMarks,
-              grandContestedCouples.map(cc => ({ id: cc.coupleId })),
-              danceIds.length * judges.length,
-              Math.floor(p.rank)
-            );
-
-            const grandResult = grandPlacements.find(gp => gp.coupleId === r10.coupleId)!;
-            
-            finalResults.push({
-              ...original,
-              finalRank: grandResult.rank,
-              rule10Resolution: { rank: r10.rank, isTie: true },
-              rule11Resolution: {
-                placementsAsMarks: rule11Marks[p.coupleId].sort((a,b)=>a-b),
-                tieBreakRank: grandResult.rank,
-                majorityCount: grandResult.majorityCount,
-                majoritySum: grandResult.majoritySum,
-              }
-            });
-          }
-        }
-      });
+      resolveRemainingTie(tiedGroup, startRank);
     }
     i = j + 1;
   }
