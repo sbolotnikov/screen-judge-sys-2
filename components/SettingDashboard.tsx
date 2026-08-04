@@ -6,6 +6,7 @@ import { Icon } from '@/components/Icon';
 import Image from 'next/image';
 import usePartySettings from '@/hooks/usePartySettings';
 import { BlurInput } from './BlurInput';
+import MultiRoundManager from './MultiRoundManager';
 
 /**
  * Settings Page
@@ -22,6 +23,11 @@ export default function SettingsDashboard({
   finalized,
   releasedDances,
   judgingFormat,
+  rounds = [],
+  activeRoundId,
+  roundScores = {},
+  roundFinalized = {},
+  roundReleasedDances = {},
 }: {
   partyID: string;
   id: string;
@@ -33,6 +39,11 @@ export default function SettingsDashboard({
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
   judgingFormat: JudgingFormat;
+  rounds?: EventData['rounds'];
+  activeRoundId?: string;
+  roundScores?: EventData['roundScores'];
+  roundFinalized?: EventData['roundFinalized'];
+  roundReleasedDances?: EventData['roundReleasedDances'];
 }) {
   const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
   const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
@@ -55,7 +66,10 @@ export default function SettingsDashboard({
         await updateEvent(id, {
           scores: {},
           finalized: {},
-          releasedDances: {}
+          releasedDances: {},
+          roundScores: {},
+          roundFinalized: {},
+          roundReleasedDances: {}
         });
       } catch (err) {
         console.error('Error clearing marks:', err);
@@ -103,7 +117,7 @@ export default function SettingsDashboard({
     if (typeof window === 'undefined') return;
     
     try {
-      const { jsPDF } = await import('jspdf');
+      const { jsPDF } = await import('jspdf/dist/jspdf.umd.min.js');
       const { default: autoTable } = await import('jspdf-autotable');
       const { calculateDancePlacements, calculateFinalResults } = await import('@/services/skatingSystem');
 
@@ -425,6 +439,7 @@ export default function SettingsDashboard({
             >
               <option value="Original">Original (Gold, Silver, Bronze)</option>
               <option value="Final">Final (Ranking 1 to last)</option>
+              <option value="MultiRound">2 rounds and more (Ranking 1 to last)</option>
             </select>
           </div>
         </div>
@@ -662,8 +677,21 @@ export default function SettingsDashboard({
 
 </div>
 
+{judgingFormat === 'MultiRound' && (
+  <MultiRoundManager
+    eventId={id}
+    teams={teams}
+    dances={dances}
+    judges={judges}
+    rounds={rounds}
+    activeRoundId={activeRoundId}
+    roundScores={roundScores}
+    roundFinalized={roundFinalized}
+    roundReleasedDances={roundReleasedDances}
+  />
+)}
 
-
+{judgingFormat !== 'MultiRound' && <>
 <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
         <div className="flex items-center space-x-3 mb-6">
           <div className="p-2 bg-amber-100 rounded-xl">
@@ -786,6 +814,7 @@ export default function SettingsDashboard({
           </div>
         </div>
       </div>
+</>}
 
       {/* Judge Selection Modal */}
       {isJudgeModalOpen && (

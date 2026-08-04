@@ -31,7 +31,21 @@ export type Judge = {
 
 export type ScoreValue = 'gold' | 'silver' | 'bronze' | number | null;
 
-export type JudgingFormat = 'Original' | 'Final';
+export type JudgingFormat = 'Original' | 'Final' | 'MultiRound';
+
+export type CompetitionRound = {
+  id: string;
+  name: string;
+  type: 'preliminary' | 'final';
+  danceIds: string[];
+  judgeIds: string[];
+  competitorCount: number;
+  selectionCount: number;
+  plannedAdvancers: number;
+  eligibleTeamIds: string[];
+  advancingTeamIds?: string[];
+  status: 'setup' | 'active' | 'awaiting_advance' | 'completed';
+};
 
 export type EventData = {
   id: string;
@@ -47,6 +61,11 @@ export type EventData = {
   finalized?: Record<string, Record<string, boolean>>;
   // releasedDances structure: { [danceId]: boolean }
   releasedDances?: Record<string, boolean>;
+  rounds?: CompetitionRound[];
+  activeRoundId?: string;
+  roundScores?: Record<string, Record<string, Record<string, Record<string, ScoreValue>>>>;
+  roundFinalized?: Record<string, Record<string, Record<string, boolean>>>;
+  roundReleasedDances?: Record<string, Record<string, boolean>>;
 }
 
 export interface Placement {

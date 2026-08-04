@@ -242,7 +242,8 @@ export default function EventsDashboard({ id }: { id?: string }) {
            eventID == null ? 
           (events
             .filter((event) =>
-              event.judges.some((judge) => judge.id === user?.id),
+              event.judges.some((judge) => judge.id === user?.id) ||
+              event.rounds?.some(round => round.judgeIds.includes(user?.id || '')),
             )
             .map((event) => {
               return (
@@ -450,6 +451,11 @@ export default function EventsDashboard({ id }: { id?: string }) {
             finalized={finalized}
             releasedDances={releasedDances}
             judgingFormat={selectedEvent?.judgingFormat || 'Original'}
+            rounds={selectedEvent?.rounds}
+            activeRoundId={selectedEvent?.activeRoundId}
+            roundScores={selectedEvent?.roundScores}
+            roundFinalized={selectedEvent?.roundFinalized}
+            roundReleasedDances={selectedEvent?.roundReleasedDances}
           />
           <DisplayCompResults
             name={eventName}
@@ -461,6 +467,11 @@ export default function EventsDashboard({ id }: { id?: string }) {
             judgingFormat={selectedEvent?.judgingFormat || 'Original'}
             releasedDances={releasedDances}
             finalized={finalized}
+            rounds={selectedEvent?.rounds}
+            activeRoundId={selectedEvent?.activeRoundId}
+            roundScores={selectedEvent?.roundScores}
+            roundFinalized={selectedEvent?.roundFinalized}
+            roundReleasedDances={selectedEvent?.roundReleasedDances}
             isAnimationOn={false}
             colorBG={colorBG}
             textColor={textColor}
@@ -480,6 +491,10 @@ export default function EventsDashboard({ id }: { id?: string }) {
             currentJudgeId={user.id}
             judgingFormat={selectedEvent?.judgingFormat || 'Original'}
             finalized={finalized}
+            rounds={selectedEvent?.rounds}
+            activeRoundId={selectedEvent?.activeRoundId}
+            roundScores={selectedEvent?.roundScores}
+            roundFinalized={selectedEvent?.roundFinalized}
           />
         </div>
       )}
@@ -536,6 +551,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
                     Original (Gold, Silver, Bronze)
                   </option>
                   <option value="Final">Final (Ranking 1 to last)</option>
+                  <option value="MultiRound">2 rounds and more (Ranking 1 to last)</option>
                 </select>
               </div>
               <div className="flex justify-end space-x-3">

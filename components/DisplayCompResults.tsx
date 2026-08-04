@@ -11,6 +11,7 @@ import {
   Placement,
   FinalResult,
   Rankings,
+  CompetitionRound,
 } from '@/types/types';
 import { motion } from 'framer-motion';
 import { Icon } from '@/components/Icon';
@@ -42,12 +43,237 @@ export default function DisplayCompResults(props: {
   judgingFormat?: JudgingFormat;
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
+  rounds?: CompetitionRound[];
+  activeRoundId?: string;
+  roundScores?: EventData['roundScores'];
+  roundFinalized?: EventData['roundFinalized'];
+  roundReleasedDances?: EventData['roundReleasedDances'];
   isAnimationOn?: boolean;
 } & ResultsThemeProps) {
+  if (props.judgingFormat === 'MultiRound') {
+    return <MultiRoundResults {...props} />;
+  }
   if (props.judgingFormat === 'Final') {
     return <FinalResultsSkating {...props} />;
   }
   return <OriginalResults {...props} />;
+}
+
+function MultiRoundResults({
+  name,
+  teams,
+  dances,
+  judges,
+  rounds = [],
+  activeRoundId,
+  roundScores = {},
+  roundFinalized = {},
+  roundReleasedDances = {},
+  isAnimationOn = true,
+  colorBG,
+  textColor,
+}: {
+  name: string;
+  teams: Team[];
+  dances: Dance[];
+  judges: Judge[];
+  rounds?: CompetitionRound[];
+  activeRoundId?: string;
+  roundScores?: EventData['roundScores'];
+  roundFinalized?: EventData['roundFinalized'];
+  roundReleasedDances?: EventData['roundReleasedDances'];
+  isAnimationOn?: boolean;
+} & ResultsThemeProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const autoScrollContentKey = JSON.stringify({
+    scores: roundScores,
+    releases: roundReleasedDances,
+    roundIds: rounds.map(round => round.id),
+  });
+  useAutoScroll(
+    scrollContainerRef,
+    contentRef,
+    isAnimationOn,
+    autoScrollContentKey,
+    activeRoundId || 'multi-round',
+    name,
+  );
+
+  const activeRoundIndex = rounds.findIndex(round => round.id === activeRoundId);
+  const activeRound = activeRoundIndex >= 0 ? rounds[activeRoundIndex] : undefined;
+  const activeRoundDanceIds = activeRound
+    ? (activeRound.danceIds.length ? activeRound.danceIds : dances.map(dance => dance.id))
+    : [];
+  const activeRoundHasReleasedData = activeRound
+    ? activeRoundDanceIds.some(danceId => roundReleasedDances?.[activeRound.id]?.[danceId])
+    : false;
+  const previousRound = activeRoundIndex > 0 ? rounds[activeRoundIndex - 1] : undefined;
+  const qualifierIds = activeRound?.eligibleTeamIds.length
+    ? activeRound.eligibleTeamIds
+    : previousRound?.advancingTeamIds || [];
+
+  if (activeRound && activeRoundIndex > 0 && !activeRoundHasReleasedData && qualifierIds.length > 0) {
+    const qualifiedTeams = teams
+      .filter(team => qualifierIds.includes(team.id))
+      .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { numeric: true }));
+    return (
+      <div ref={scrollContainerRef} className="display-comp-results w-full h-screen overflow-y-auto scrollbar-hide p-2" style={resultsTheme(colorBG, textColor)}>
+        <div ref={contentRef} className="space-y-8 pb-10">
+          <ResultsHeader name={name} selectedDanceName={`${activeRound.name} qualifiers`} />
+          <section className="bg-white rounded-3xl border border-stone-200 p-8 shadow-sm">
+            <div className="text-center mb-7">
+              <h2 className="text-3xl font-black text-stone-900">Couples advancing to {activeRound.name}</h2>
+              <p className="text-stone-500 mt-2">Listed alphabetically until results from this round are released.</p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {qualifiedTeams.map((team, index) => (
+                <div key={team.id} className="flex items-center gap-4 rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
+                  <span className="w-10 h-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-black">{index + 1}</span>
+                  <span className="text-lg font-bold text-stone-900">{team.name || team.id}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  const activeFinalRound = activeRound?.type === 'final' ? activeRound : undefined;
+  if (activeFinalRound) {
+    const finalTeams = teams.filter(team =>
+      (activeFinalRound.eligibleTeamIds.length ? activeFinalRound.eligibleTeamIds : teams.map(item => item.id)).includes(team.id)
+    ).slice(0, activeFinalRound.competitorCount || teams.length);
+    const finalDances = dances.filter(dance =>
+      (activeFinalRound.danceIds.length ? activeFinalRound.danceIds : dances.map(item => item.id)).includes(dance.id)
+    );
+    const finalJudges = judges.filter(judge =>
+      (activeFinalRound.judgeIds.length ? activeFinalRound.judgeIds : judges.map(item => item.id)).includes(judge.id)
+    );
+    return (
+      <FinalResultsSkating
+        name={`${name} — ${activeFinalRound.name}`}
+        scores={roundScores?.[activeFinalRound.id] || {}}
+        teams={finalTeams}
+        dances={finalDances}
+        judges={finalJudges}
+        selectedDanceId="all"
+        finalized={roundFinalized?.[activeFinalRound.id] || {}}
+        releasedDances={roundReleasedDances?.[activeFinalRound.id] || {}}
+        isAnimationOn={isAnimationOn}
+        colorBG={colorBG}
+        textColor={textColor}
+      />
+    );
+  }
+
+  const releasedRounds = rounds.filter(round => {
+    const configuredDanceIds = round.danceIds.length
+      ? round.danceIds
+      : dances.map(dance => dance.id);
+    return configuredDanceIds.some(danceId => roundReleasedDances?.[round.id]?.[danceId]);
+  });
+
+  if (!releasedRounds.length) return <PendingResults colorBG={colorBG} textColor={textColor} />;
+
+  return (
+    <div ref={scrollContainerRef} className="display-comp-results w-full h-screen overflow-y-auto scrollbar-hide p-2" style={resultsTheme(colorBG, textColor)}>
+      <div ref={contentRef} className="space-y-8 pb-10">
+        <ResultsHeader name={name} selectedDanceName="Released round results" />
+        {releasedRounds.map(round => {
+          const eligibleTeamIds = round.eligibleTeamIds.length
+            ? round.eligibleTeamIds
+            : teams.map(team => team.id);
+          const configuredDanceIds = round.danceIds.length
+            ? round.danceIds
+            : dances.map(dance => dance.id);
+          const configuredJudgeIds = round.judgeIds.length
+            ? round.judgeIds
+            : judges.map(judge => judge.id);
+          const roundTeams = teams
+            .filter(team => eligibleTeamIds.includes(team.id))
+            .slice(0, round.competitorCount || eligibleTeamIds.length);
+          const roundJudges = judges.filter(judge => configuredJudgeIds.includes(judge.id));
+          const releasedDanceIds = configuredDanceIds.filter(danceId => roundReleasedDances?.[round.id]?.[danceId]);
+          let totals: Array<{ team: Team; score: number; rank: number }>;
+          if (round.type === 'preliminary') {
+            const scored = roundTeams.map(team => {
+              let score = 0;
+              releasedDanceIds.forEach(danceId => roundJudges.forEach(judge => {
+                if (roundFinalized?.[round.id]?.[danceId]?.[judge.id] && roundScores?.[round.id]?.[danceId]?.[judge.id]?.[team.id] === 1) score += 1;
+              }));
+              return { team, score };
+            }).sort((a, b) => b.score - a.score);
+            totals = scored.map((item, index) => ({
+              ...item,
+              rank: index > 0 && item.score === scored[index - 1].score
+                ? scored.slice(0, index).findIndex(previous => previous.score === item.score) + 1
+                : index + 1,
+            }));
+          } else {
+            const rawRankings: Rankings = {};
+            const dancePlacements: Record<string, Placement[]> = {};
+            releasedDanceIds.forEach(danceId => {
+              rawRankings[danceId] = {};
+              roundJudges.forEach(judge => {
+                rawRankings[danceId][judge.id] = {};
+                roundTeams.forEach(team => {
+                  const mark = roundScores?.[round.id]?.[danceId]?.[judge.id]?.[team.id];
+                  rawRankings[danceId][judge.id][team.id] = typeof mark === 'number' ? mark : roundTeams.length + 1;
+                });
+              });
+              dancePlacements[danceId] = calculateDancePlacements(rawRankings[danceId], roundTeams, roundJudges.length);
+            });
+            const finalResults = calculateFinalResults(dancePlacements, roundTeams, releasedDanceIds, rawRankings, roundJudges.map(judge => judge.id));
+            totals = finalResults.map(result => ({
+              team: roundTeams.find(team => team.id === result.coupleId)!,
+              score: result.totalScore,
+              rank: result.finalRank,
+            })).filter(item => item.team);
+          }
+
+          return (
+            <section key={round.id} className="bg-white rounded-3xl border border-stone-200 p-7 shadow-sm">
+              <div className="flex flex-wrap items-end justify-between gap-2 mb-5">
+                <div><h2 className="text-2xl font-bold text-stone-900">{round.name}</h2><p className="text-sm text-stone-500">{round.type === 'preliminary' ? 'More selections rank higher' : 'Final ranking — lower total ranks higher'}</p></div>
+                <span className="text-sm text-violet-700 font-bold">{releasedDanceIds.map(id => dances.find(dance => dance.id === id)?.name).filter(Boolean).join(' · ')}</span>
+              </div>
+              {round.type === 'preliminary' ? (
+                <div className="relative pt-8 pb-10 px-5 border-2 border-dashed border-stone-200 rounded-3xl bg-stone-50/50 overflow-hidden">
+                  <StartLine />
+                  <FinishLine />
+                  <div className="space-y-7 relative z-10">
+                    {totals.map(item => {
+                      const maxScore = Math.max(...totals.map(total => total.score), 1);
+                      const percentage = (item.score / maxScore) * 75 + 10;
+                      return (
+                        <div key={item.team.id} className="relative h-20 flex items-center">
+                          <div className="absolute left-0 right-0 h-2 bg-stone-200 rounded-full" />
+                          <div className="absolute left-0 h-2 bg-violet-300 rounded-full transition-all duration-700" style={{ width: `${percentage}%` }} />
+                          <div className="absolute flex items-center gap-3 transition-all duration-700" style={{ left: `${percentage}%`, transform: 'translateX(-50%)' }}>
+                            <span className="w-10 h-10 rounded-full bg-white border-2 border-violet-300 shadow flex items-center justify-center font-black text-violet-700">{item.rank}</span>
+                            <div className="bg-white/95 border border-stone-200 rounded-xl px-3 py-2 shadow-sm min-w-28">
+                              <p className="font-bold text-stone-800 truncate">{item.team.name || item.team.id}</p>
+                              <p className="text-xs font-black text-violet-700">{item.score} points</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-100">
+                  {totals.map(item => <div key={item.team.id} className="flex items-center justify-between py-3"><div className="flex items-center gap-3"><span className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center font-black">{item.rank}</span><span className="font-bold text-stone-800">{item.team.name || item.team.id}</span></div><span className="font-black text-violet-700">{item.score} total</span></div>)}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function useAutoScroll(
@@ -92,7 +318,7 @@ function useAutoScroll(
           continue;
         }
 
-        const speed = 40; // Reduced speed for better readability
+        const speed = 80;
         const duration = maxScroll / speed;
 
         // Scroll down

@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { Dance, EventData, Judge, ScoreValue, Team, JudgingFormat } from '@/types/types';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { CompetitionRound, Dance, EventData, Judge, ScoreValue, Team, JudgingFormat } from '@/types/types';
 import { Icon } from '@/components/Icon';
 import usePartySettings from '@/hooks/usePartySettings';
 import Image from 'next/image';
+
+const EMPTY_ROUNDS: CompetitionRound[] = [];
+const EMPTY_ROUND_SCORES: NonNullable<EventData['roundScores']> = {};
+const EMPTY_ROUND_FINALIZED: NonNullable<EventData['roundFinalized']> = {};
 
 /**
  * Scoring Page
@@ -21,6 +25,10 @@ export default function ScoringPage({
   judges,
   currentJudgeId,
   judgingFormat = 'Original',
+  rounds = EMPTY_ROUNDS,
+  activeRoundId,
+  roundScores = EMPTY_ROUND_SCORES,
+  roundFinalized = EMPTY_ROUND_FINALIZED,
 }: {
   partyID: string;
   id: string;
@@ -32,6 +40,10 @@ export default function ScoringPage({
   judges: Judge[];
   currentJudgeId: string;
   judgingFormat: JudgingFormat;
+  rounds?: CompetitionRound[];
+  activeRoundId?: string;
+  roundScores?: EventData['roundScores'];
+  roundFinalized?: EventData['roundFinalized'];
 }) {
   const scoringPageRef = useRef<HTMLDivElement>(null);
 
@@ -62,12 +74,51 @@ export default function ScoringPage({
   }, []);
 
   const { setCompID } = usePartySettings();
-  const [currentDanceId, setCurrentDanceId] = useState(selectedDanceId);
+  const activeRound = judgingFormat === 'MultiRound'
+    ? rounds.find(round => round.id === activeRoundId) ||
+      rounds.find(round => round.status === 'active')
+    : undefined;
+  const activeRoundTeamIds = useMemo(
+    () => activeRound?.eligibleTeamIds.length ? activeRound.eligibleTeamIds : teams.map(team => team.id),
+    [activeRound, teams]
+  );
+  const activeRoundDanceIds = useMemo(
+    () => activeRound?.danceIds.length ? activeRound.danceIds : dances.map(dance => dance.id),
+    [activeRound, dances]
+  );
+  const activeRoundJudgeIds = useMemo(
+    () => activeRound?.judgeIds.length ? activeRound.judgeIds : judges.map(judge => judge.id),
+    [activeRound, judges]
+  );
+  const activeRoundCompetitorCount = activeRound?.competitorCount
+    ? Math.min(activeRound.competitorCount, activeRoundTeamIds.length)
+    : activeRoundTeamIds.length;
+  const scoringTeams = activeRound
+    ? teams.filter(team => activeRoundTeamIds.includes(team.id)).slice(0, activeRoundCompetitorCount)
+    : teams;
+  const scoringDances = activeRound
+    ? dances.filter(dance => activeRoundDanceIds.includes(dance.id))
+    : dances;
+  const scoringJudges = activeRound
+    ? judges.filter(judge => activeRoundJudgeIds.includes(judge.id))
+    : judges;
+  const effectiveScores = useMemo(
+    () => activeRound ? (roundScores?.[activeRound.id] || {}) : scores,
+    [activeRound, roundScores, scores]
+  );
+  const effectiveFinalized = useMemo(
+    () => activeRound ? (roundFinalized?.[activeRound.id] || {}) : finalized,
+    [activeRound, roundFinalized, finalized]
+  );
+  const [currentDanceId, setCurrentDanceId] = useState(
+    activeRoundDanceIds[0] || selectedDanceId
+  );
   const [localScores, setLocalScores] = useState<Record<string, ScoreValue>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [hasBackup, setHasBackup] = useState(false);
+  const currentJudgeIsFinalized = effectiveFinalized?.[currentDanceId]?.[currentJudgeId] === true;
 
   // Sync currentDanceId with selectedDanceId from props when it changes
   // This allows the admin to still "force" a dance if they change it
@@ -78,22 +129,28 @@ export default function ScoringPage({
   }, [selectedDanceId]);
 
   useEffect(() => {
+    if (activeRound && !activeRoundDanceIds.includes(currentDanceId)) {
+      setCurrentDanceId(activeRoundDanceIds[0] || '');
+    }
+  }, [activeRound, activeRoundDanceIds, currentDanceId]);
+
+  useEffect(() => {
     if (partyID) {
       setCompID(partyID);
     }
   }, [partyID, setCompID]);
 
   // Generate a unique key for backup based on party, event, dance, and judge
-  const backupKey = `scoring_backup_${partyID}_${id}_${currentDanceId}_${currentJudgeId}`;
+  const backupKey = `scoring_backup_${partyID}_${id}_${activeRound?.id || 'standard'}_${currentDanceId}_${currentJudgeId}`;
 
   // Restore from backup on mount or when context changes
   useEffect(() => {
-    if (currentJudgeId && !isFinalized(currentJudgeId)) {
+    if (currentJudgeId && !currentJudgeIsFinalized) {
       const savedBackup = localStorage.getItem(backupKey);
       if (savedBackup) {
         try {
           const parsedBackup = JSON.parse(savedBackup);
-          const dbScores = scores[currentDanceId]?.[currentJudgeId] || {};
+          const dbScores = effectiveScores[currentDanceId]?.[currentJudgeId] || {};
           
           // Only restore if backup is different from DB to avoid redundant alerts
           if (JSON.stringify(parsedBackup) !== JSON.stringify(dbScores)) {
@@ -108,33 +165,35 @@ export default function ScoringPage({
       }
       
       // If no backup or backup matches DB, sync with current judge's scores for the selected dance from DB
-      const dbScores = scores[currentDanceId]?.[currentJudgeId] || {};
-      setLocalScores(dbScores);
+      const dbScores = effectiveScores[currentDanceId]?.[currentJudgeId] || {};
+      setLocalScores(previous =>
+        JSON.stringify(previous) === JSON.stringify(dbScores) ? previous : dbScores
+      );
       setHasBackup(false);
     }
-  }, [currentDanceId, currentJudgeId, scores, finalized, backupKey]);
+  }, [currentDanceId, currentJudgeId, effectiveScores, currentJudgeIsFinalized, backupKey]);
 
   // Save to backup whenever localScores changes
   useEffect(() => {
-    if (Object.keys(localScores).length > 0 && !isFinalized(currentJudgeId)) {
+    if (Object.keys(localScores).length > 0 && !currentJudgeIsFinalized) {
       localStorage.setItem(backupKey, JSON.stringify(localScores));
-    } else if (isFinalized(currentJudgeId)) {
+    } else if (currentJudgeIsFinalized) {
       // Clear backup if finalized
       localStorage.removeItem(backupKey);
       setHasBackup(false);
     }
-  }, [localScores, backupKey, currentJudgeId]);
+  }, [localScores, backupKey, currentJudgeIsFinalized]);
 
   const clearBackup = () => {
     localStorage.removeItem(backupKey);
     setHasBackup(false);
     // Re-sync with DB
-    const dbScores = scores[currentDanceId]?.[currentJudgeId] || {};
+    const dbScores = effectiveScores[currentDanceId]?.[currentJudgeId] || {};
     setLocalScores(dbScores);
   };
 
   const isFinalized = (judgeId: string) => {
-    return finalized?.[currentDanceId]?.[judgeId] === true;
+    return effectiveFinalized?.[currentDanceId]?.[judgeId] === true;
   };
 
   /**
@@ -158,6 +217,13 @@ export default function ScoringPage({
     setLocalScores(newLocalScores);
   };
 
+  const handlePreliminaryToggle = (teamId: string) => {
+    if (!activeRound || isFinalized(currentJudgeId)) return;
+    const isSelected = localScores[teamId] === 1;
+    if (!isSelected && selectedCount >= activeRound.selectionCount) return;
+    setLocalScores({ ...localScores, [teamId]: isSelected ? null : 1 });
+  };
+
   /**
    * Final Format Logic: Assign a team to a specific rank.
    * - If the team is from the pool:
@@ -171,9 +237,9 @@ export default function ScoringPage({
     if (!currentJudgeId || isFinalized(currentJudgeId)) return;
 
     // 1. Create an ordered array of the current rankings
-    const rankedArray: (string | null)[] = Array(teams.length).fill(null);
+    const rankedArray: (string | null)[] = Array(scoringTeams.length).fill(null);
     Object.entries(localScores).forEach(([tId, rank]) => {
-      if (typeof rank === 'number' && rank >= 1 && rank <= teams.length) {
+      if (typeof rank === 'number' && rank >= 1 && rank <= scoringTeams.length) {
         rankedArray[rank - 1] = tId;
       }
     });
@@ -206,7 +272,7 @@ export default function ScoringPage({
     
     // 4. Any team pushed beyond the last slot is effectively "unranked"
     // We truncate to teams.length to maintain the pool consistency
-    const finalRankedIds = rankedArray.slice(0, teams.length);
+    const finalRankedIds = rankedArray.slice(0, scoringTeams.length);
 
     // 5. Convert back to the Record format required by the state
     const newLocalScores: Record<string, ScoreValue> = {};
@@ -253,6 +319,7 @@ export default function ScoringPage({
               eventId: id,
               danceId: currentDanceId,
               judgeId: currentJudgeId,
+              roundId: activeRound?.id,
               scores: submittedScores,
             }),
           });
@@ -282,7 +349,10 @@ export default function ScoringPage({
     }
   };
 
-  const allTeamsMarked = teams.length > 0 && teams.every(team => {
+  const selectedCount = Object.values(localScores).filter(score => score === 1).length;
+  const allTeamsMarked = activeRound?.type === 'preliminary'
+    ? selectedCount === activeRound.selectionCount
+    : scoringTeams.length > 0 && scoringTeams.every(team => {
     const s = localScores[team.id];
     return s !== null && s !== undefined;
   });
@@ -304,9 +374,9 @@ export default function ScoringPage({
   };
 
   const nextDanceId = (() => {
-    const currentIndex = dances.findIndex(d => d.id === currentDanceId);
-    if (currentIndex !== -1 && currentIndex < dances.length - 1) {
-      return dances[currentIndex + 1].id;
+    const currentIndex = scoringDances.findIndex(d => d.id === currentDanceId);
+    if (currentIndex !== -1 && currentIndex < scoringDances.length - 1) {
+      return scoringDances[currentIndex + 1].id;
     }
     return null;
   })();
@@ -318,7 +388,18 @@ export default function ScoringPage({
     }
   };
 
-  if (judges.length === 0 || dances.length === 0 || teams.length === 0) {
+  if (judgingFormat === 'MultiRound' && !activeRound) {
+    return (
+      <div ref={scoringPageRef} className="text-center py-20 bg-white rounded-3xl shadow-sm border border-stone-200 overscroll-y-none">
+        <Icon name="Activity" className="h-10 w-10 text-amber-500 mx-auto mb-4" />
+        <h3 className="text-xl font-bold text-stone-900">Waiting for an active round</h3>
+        <p className="mt-2 text-stone-500">The administrator must configure and activate the next competition round.</p>
+      </div>
+    );
+  }
+
+  if (scoringJudges.length === 0 || scoringDances.length === 0 || scoringTeams.length === 0 ||
+      (activeRound && !activeRoundJudgeIds.includes(currentJudgeId))) {
     return (
       <div className="text-center py-20 bg-white rounded-3xl shadow-sm border border-stone-200">
         <div className="mx-auto w-20 h-20 bg-stone-50 rounded-full flex items-center justify-center mb-4">
@@ -326,13 +407,13 @@ export default function ScoringPage({
         </div>
         <h3 className="text-xl font-bold text-stone-900">Missing Data</h3>
         <p className="mt-2 text-stone-500 max-w-sm mx-auto">
-          Please add teams, dances, and judges in the Settings page first.
+          You are not assigned to the active round, or the round is missing eligible couples and dances.
         </p>
       </div>
     );
   }
 
-  const unrankedTeams = teams.filter(t => localScores[t.id] === null || localScores[t.id] === undefined);
+  const unrankedTeams = scoringTeams.filter(t => localScores[t.id] === null || localScores[t.id] === undefined);
 
   return (
     <div ref={scoringPageRef} className="space-y-10 pb-5 overscroll-y-none">
@@ -342,21 +423,23 @@ export default function ScoringPage({
             Scoring
           </h1>
           <p className="mt-2 text-stone-500 text-lg">
-            {judgingFormat === 'Original' 
+            {activeRound?.type === 'preliminary'
+              ? `Choose exactly ${activeRound.selectionCount} couples. Each selection is one point.`
+              : judgingFormat === 'Original'
               ? 'Assign Gold, Silver, or Bronze to each team.' 
               : 'Rank the teams from 1st to last place.'}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="bg-violet-100 text-violet-800 px-4 py-2 rounded-2xl text-sm font-bold border border-violet-200">
-            Format: {judgingFormat}
+            {activeRound ? activeRound.name : `Format: ${judgingFormat}`}
           </div>
           <select 
             value={currentDanceId}
             onChange={(e) => setCurrentDanceId(e.target.value)}
             className="bg-white border border-stone-200 text-stone-900 text-sm font-bold rounded-2xl px-4 py-2 focus:ring-violet-500 focus:border-violet-500"
           >
-            {dances.map(dance => (
+            {scoringDances.map(dance => (
               <option key={dance.id} value={dance.id}>
                 {dance.name} {finalized?.[dance.id]?.[currentJudgeId] ? '✓' : ''}
               </option>
@@ -365,7 +448,7 @@ export default function ScoringPage({
         </div>
       </div>
 
-      {judges.filter(j => j.id === currentJudgeId).map((judge) => (
+      {scoringJudges.filter(j => j.id === currentJudgeId).map((judge) => (
         <div
           key={judge.id}
           className="bg-white shadow-sm sm:rounded-3xl border border-stone-200/60 overflow-hidden"
@@ -437,16 +520,44 @@ export default function ScoringPage({
           </div>
 
           <div className="divide-y divide-stone-100">
-            {dances.filter((dance) => dance.id === currentDanceId).map((dance) => (
+            {scoringDances.filter((dance) => dance.id === currentDanceId).map((dance) => (
               <div key={dance.id} className="px-6 py-8">
                 <h3 className="text-xl font-bold text-stone-800 mb-8 flex items-center">
                   <span className="w-2 h-6 bg-violet-500 rounded-full mr-3"></span>
                   {dance.name}
                 </h3>
 
-                {judgingFormat === 'Original' ? (
+                {activeRound?.type === 'preliminary' ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-5">
+                      <p className="font-bold text-stone-700">Selected {selectedCount} of {activeRound.selectionCount}</p>
+                      <div className="h-2 flex-1 mx-4 rounded-full bg-stone-100 overflow-hidden">
+                        <div className="h-full bg-violet-500" style={{ width: `${Math.min(100, (selectedCount / activeRound.selectionCount) * 100)}%` }} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {scoringTeams.map((team, index) => {
+                        const selected = localScores[team.id] === 1;
+                        const disabled = isFinalized(judge.id) || (!selected && selectedCount >= activeRound.selectionCount);
+                        return (
+                          <button
+                            key={team.id}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => handlePreliminaryToggle(team.id)}
+                            className={`p-4 rounded-2xl border-2 text-left transition-all disabled:cursor-not-allowed ${selected ? 'border-violet-500 bg-violet-50 text-violet-900' : 'border-stone-200 bg-white text-stone-700 disabled:opacity-40'}`}
+                          >
+                            <span className="block text-xs uppercase tracking-wider text-stone-400">Couple {index + 1}</span>
+                            <span className="block font-bold truncate">{team.name || team.id}</span>
+                            <span className="block text-xs mt-2">{selected ? 'Selected · 1 point' : 'Select'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : judgingFormat === 'Original' ? (
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    {teams.map((team) => {
+                    {scoringTeams.map((team) => {
                       const currentScore = localScores[team.id] || null;
                       const isJudgeFinalized = isFinalized(judge.id);
 
@@ -519,7 +630,7 @@ export default function ScoringPage({
                         Step 1: Select a Team
                       </h4>
                       <div className="flex flex-wrap gap-4">
-                        {teams.map(team => {
+                        {scoringTeams.map(team => {
                           const isRanked = localScores[team.id] !== null && localScores[team.id] !== undefined;
                           const isSelected = selectedTeamId === team.id;
                           const isJudgeFinalized = isFinalized(judge.id);
@@ -558,10 +669,10 @@ export default function ScoringPage({
                           Step 2: Assign to a Placement
                         </h4>
                       </div>
-                      {Array.from({ length: teams.length }, (_, i) => {
+                      {Array.from({ length: scoringTeams.length }, (_, i) => {
                         const rank = i + 1;
                         const teamAtRankId = Object.keys(localScores).find(tId => localScores[tId] === rank);
-                        const teamAtRank = teams.find(t => t.id === teamAtRankId);
+                        const teamAtRank = scoringTeams.find(t => t.id === teamAtRankId);
                         const isJudgeFinalized = isFinalized(judge.id);
 
                         return (
@@ -605,7 +716,7 @@ export default function ScoringPage({
                             ) : (
                               <div className="flex-1">
                                 <span className="text-stone-400 font-medium italic">
-                                  {!isJudgeFinalized && selectedTeamId ? `Place ${teams.find(t => t.id === selectedTeamId)?.name} here` : 'Empty Slot'}
+                                  {!isJudgeFinalized && selectedTeamId ? `Place ${scoringTeams.find(t => t.id === selectedTeamId)?.name} here` : 'Empty Slot'}
                                 </span>
                               </div>
                             )}
