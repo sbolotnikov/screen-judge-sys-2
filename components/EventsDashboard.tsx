@@ -282,7 +282,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
                   e.preventDefault();
                   setEventID(null);
                 }}
-                className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-md hover:shadow-lg transition-all"
+                className="inline-flex mt-5 items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-md hover:shadow-lg transition-all"
               >
                 <Icon name="X" className="mr-2 h-5 w-5" /> Back
               </button>

@@ -229,7 +229,7 @@ const ChoosePartyModal = ({ onReturn, onAlert }: Props) => {
     <div className="w-full flex flex-col justify-center items-center">
       <select
         multiple
-        className="w-full md:w-3/4 p-2 h-48 border border-gray-300 rounded mb-4 overflow-y-auto"
+        className="w-full md:w-3/4 mt-5 p-2 h-48 border border-gray-300 rounded mb-4 overflow-y-auto"
         name="parties"
         id="parties"
         value={choosenParties}
