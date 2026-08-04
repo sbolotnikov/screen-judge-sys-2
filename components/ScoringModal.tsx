@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dance, EventData, Judge, ScoreValue, Team, JudgingFormat } from '@/types/types';
 import { Icon } from '@/components/Icon';
 import usePartySettings from '@/hooks/usePartySettings';
@@ -33,6 +33,34 @@ export default function ScoringPage({
   currentJudgeId: string;
   judgingFormat: JudgingFormat;
 }) {
+  const scoringPageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const changedElements: Array<{ element: HTMLElement; previousValue: string }> = [];
+    const preventScrollReload = (element: HTMLElement) => {
+      changedElements.push({ element, previousValue: element.style.overscrollBehaviorY });
+      element.style.overscrollBehaviorY = 'none';
+    };
+
+    preventScrollReload(document.documentElement);
+    preventScrollReload(document.body);
+
+    let ancestor = scoringPageRef.current?.parentElement;
+    while (ancestor) {
+      const overflowY = window.getComputedStyle(ancestor).overflowY;
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        preventScrollReload(ancestor);
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    return () => {
+      changedElements.forEach(({ element, previousValue }) => {
+        element.style.overscrollBehaviorY = previousValue;
+      });
+    };
+  }, []);
+
   const { setCompID } = usePartySettings();
   const [currentDanceId, setCurrentDanceId] = useState(selectedDanceId);
   const [localScores, setLocalScores] = useState<Record<string, ScoreValue>>({});
@@ -307,7 +335,7 @@ export default function ScoringPage({
   const unrankedTeams = teams.filter(t => localScores[t.id] === null || localScores[t.id] === undefined);
 
   return (
-    <div className="space-y-10 pb-5">
+    <div ref={scoringPageRef} className="space-y-10 pb-5 overscroll-y-none">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-extrabold text-stone-900 tracking-tight">
