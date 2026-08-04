@@ -49,18 +49,24 @@ export default function EventsDashboard({ id }: { id?: string }) {
   const [eventID, setEventID] = useState<string | null>(null);
   const [eventToDelete, setEventToDelete] = useState<string | null>(null);
 
+  const downloadJson = (data: unknown, fileName: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+
   /**
    * Exports all events in the current list as a JSON file.
    */
   const handleExportAll = () => {
     if (events.length === 0) return;
-    const dataStr = JSON.stringify(events, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `events_${new Date().toISOString().split('T')[0]}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+    downloadJson(events, `events_${new Date().toISOString().split('T')[0]}.json`);
   };
 
   /**
@@ -73,21 +79,74 @@ export default function EventsDashboard({ id }: { id?: string }) {
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const importedData = JSON.parse(event.target?.result as string);
-        const newEventsArray = Array.isArray(importedData) ? importedData : [importedData];
-        
-        // Basic validation - check if it looks like EventData
-        const isValid = newEventsArray.every(ev => ev.teams && ev.dances && ev.judges);
+        const fileText = String(event.target?.result || '').replace(/^\uFEFF/, '');
+        const importedData: unknown = JSON.parse(fileText);
+        const sourceEvents = Array.isArray(importedData)
+          ? importedData
+          : importedData && typeof importedData === 'object' && Array.isArray((importedData as { events?: unknown }).events)
+            ? (importedData as { events: unknown[] }).events
+            : [importedData];
+
+        const isValid = sourceEvents.every(value => {
+          if (!value || typeof value !== 'object') return false;
+          const candidate = value as Partial<EventData>;
+          return Array.isArray(candidate.teams) && Array.isArray(candidate.dances) && Array.isArray(candidate.judges);
+        });
         if (!isValid) {
           alert("Invalid file format. Please ensure the file contains valid event data.");
           return;
         }
 
+        const existingIds = new Set(events.map(existingEvent => existingEvent.id));
+        const newEventsArray: EventData[] = (sourceEvents as EventData[]).map(importedEvent => {
+          const importedId = typeof importedEvent.id === 'string' && importedEvent.id
+            ? importedEvent.id
+            : crypto.randomUUID();
+          const eventId = existingIds.has(importedId) ? crypto.randomUUID() : importedId;
+          existingIds.add(eventId);
+          const judgingFormat = importedEvent.judgingFormat === 'MultiRound' ||
+            String(importedEvent.judgingFormat || '').toLowerCase().includes('round')
+            ? 'MultiRound'
+            : importedEvent.judgingFormat === 'Final' ? 'Final' : 'Original';
+          const rounds = Array.isArray(importedEvent.rounds)
+            ? importedEvent.rounds.map((round, index) => ({
+                id: typeof round.id === 'string' && round.id ? round.id : crypto.randomUUID(),
+                name: round.name || `Round ${index + 1}`,
+                type: round.type === 'final' ? 'final' as const : 'preliminary' as const,
+                danceIds: Array.isArray(round.danceIds) ? round.danceIds : [],
+                judgeIds: Array.isArray(round.judgeIds) ? round.judgeIds : [],
+                competitorCount: Number(round.competitorCount) || importedEvent.teams.length,
+                selectionCount: Math.max(1, Number(round.selectionCount) || 1),
+                plannedAdvancers: Math.max(1, Number(round.plannedAdvancers) || 1),
+                eligibleTeamIds: Array.isArray(round.eligibleTeamIds) ? round.eligibleTeamIds : [],
+                advancingTeamIds: Array.isArray(round.advancingTeamIds) ? round.advancingTeamIds : undefined,
+                status: ['setup', 'active', 'awaiting_advance', 'completed'].includes(round.status)
+                  ? round.status
+                  : index === 0 ? 'active' as const : 'setup' as const,
+              }))
+            : [];
+          return {
+            ...importedEvent,
+            id: eventId,
+            judgingFormat,
+            scores: importedEvent.scores || {},
+            finalized: importedEvent.finalized || {},
+            releasedDances: importedEvent.releasedDances || {},
+            rounds,
+            activeRoundId: rounds.some(round => round.id === importedEvent.activeRoundId)
+              ? importedEvent.activeRoundId
+              : rounds.find(round => round.status === 'active')?.id,
+            roundScores: importedEvent.roundScores || {},
+            roundFinalized: importedEvent.roundFinalized || {},
+            roundReleasedDances: importedEvent.roundReleasedDances || {},
+          };
+        });
+
         await addEvents(newEventsArray);
         alert(`Successfully imported ${newEventsArray.length} event(s).`);
       } catch (err) {
         console.error('Error importing events:', err);
-        alert("Error parsing JSON file. Please check the file content.");
+        alert(`Could not import the JSON file: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     };
     reader.readAsText(file);
@@ -116,13 +175,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
    * Exports a single event as a JSON file.
    */
   const handleExportEvent = (event: EventData) => {
-    const dataStr = JSON.stringify(event, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `event_${event.name?.replace(/\s+/g, '_') || event.id}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+    downloadJson(event, `event_${event.name?.replace(/\s+/g, '_') || event.id}.json`);
   };
 
   /**

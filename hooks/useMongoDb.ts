@@ -53,7 +53,10 @@ export const updateDoc = async (docRef: { collectionName: string, docId: string 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to update document');
+  if (!res.ok) {
+    const result = await res.json().catch(() => ({}));
+    throw new Error(result.error || `Failed to update document (${res.status})`);
+  }
   return res.json();
 };
 
