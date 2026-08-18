@@ -74,7 +74,7 @@ export default function SkatingBreakdown({
       return { 
         label: "Rule 10 Resolved", 
         color: "text-emerald-600", 
-        desc: "Initially tied on sum; resolved via Rule 10 (Placement Counts)." 
+        desc: "Initially tied on sum; resolved via Rule 10 (head-to-head majority of better dance placings)."
       };
     }
 
@@ -311,7 +311,7 @@ export default function SkatingBreakdown({
                 <div>
                   <h3 className="text-lg font-bold text-emerald-600 mb-4 flex items-center gap-3">
                     <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
-                    Rule 10: Placement Counts (Multi-Dance)
+                    Rule 10: Better Dance Majority (Multi-Dance)
                   </h3>
                   <div className="overflow-x-auto bg-stone-50 rounded-2xl border border-stone-200 p-2">
                     <table className="w-full text-[10px] sm:text-xs text-center border-separate border-spacing-0.5">

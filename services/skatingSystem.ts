@@ -171,28 +171,41 @@ export const calculateDancePlacements = (
 };
 
 /**
- * MULTI-DANCE RULE 10 (Tie-breaking based on dance placements)
+ * MULTI-DANCE RULE 10 (head-to-head majority of better dance placements)
  */
 const getRule10Leaders = (
-  group: any[],
-  dances: string[],
-  placeUnderReview: number
+  group: Array<{
+    coupleId: string;
+    dancePlacements: Record<string, number>;
+  }>,
+  dances: string[]
 ): string[] => {
-  const stats = group.map(c => {
-    const betterMarks = dances
-      .map(d => c.dancePlacements[d])
-      .filter(m => m <= placeUnderReview);
-    return {
-      coupleId: c.coupleId,
-      count: betterMarks.length,
-      sum: betterMarks.reduce((a, b) => a + b, 0),
-    };
-  }).sort((a, b) => b.count - a.count || a.sum - b.sum);
+  const matchupWins = new Map(group.map(couple => [couple.coupleId, 0]));
 
-  const best = stats[0];
-  return stats
-    .filter(s => s.count === best.count && s.sum === best.sum)
-    .map(s => s.coupleId);
+  group.forEach((couple, index) => {
+    group.slice(index + 1).forEach(opponent => {
+      let coupleWins = 0;
+      let opponentWins = 0;
+
+      dances.forEach(danceId => {
+        const couplePlace = couple.dancePlacements[danceId];
+        const opponentPlace = opponent.dancePlacements[danceId];
+        if (couplePlace < opponentPlace) coupleWins++;
+        if (opponentPlace < couplePlace) opponentWins++;
+      });
+
+      if (coupleWins > opponentWins) {
+        matchupWins.set(couple.coupleId, matchupWins.get(couple.coupleId)! + 1);
+      } else if (opponentWins > coupleWins) {
+        matchupWins.set(opponent.coupleId, matchupWins.get(opponent.coupleId)! + 1);
+      }
+    });
+  });
+
+  const mostMatchupWins = Math.max(...matchupWins.values());
+  return group
+    .filter(couple => matchupWins.get(couple.coupleId) === mostMatchupWins)
+    .map(couple => couple.coupleId);
 };
 
 /**
@@ -250,9 +263,9 @@ export const calculateFinalResults = (
           return;
         }
 
-        // Rule 10 considers only the overall place currently being awarded.
-        // It must not advance to a lower placement column to break this tie.
-        const rule10LeaderIds = getRule10Leaders(group, danceIds, placeUnderReview);
+        // Rule 10 compares every tied couple head-to-head across all dances.
+        // The couple with more better dance placements wins each matchup.
+        const rule10LeaderIds = getRule10Leaders(group, danceIds);
         const rule10Leaders = group.filter(c => rule10LeaderIds.includes(c.coupleId));
 
         if (rule10Leaders.length === 1) {
