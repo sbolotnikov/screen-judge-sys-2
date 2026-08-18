@@ -147,7 +147,7 @@ export function PartySettingsProvider({ children }: { children: ReactNode }) {
     ],
   };
 
-  const [value, loading, error] = useDocument(doc(db, 'parties', compID), {
+  const [value, loading, error, mutate] = useDocument(doc(db, 'parties', compID), {
     snapshotListenOptions: { includeMetadataChanges: true },
   });
  
