@@ -63,6 +63,7 @@ interface PartyContextType {
 }
 interface ReturnPartyContextType extends PartyContextType {
   setCompID: (id: string) => void;
+  refreshPartyData: () => Promise<void>;
   addEvent: (event: Omit<EventData, 'id'>) => Promise<void>;
   addEvents: (events: EventData[]) => Promise<void>;
   updateEvent: (eventId: string, event: Partial<EventData>) => Promise<void>;
@@ -154,6 +155,10 @@ export function PartySettingsProvider({ children }: { children: ReactNode }) {
     ? ({ ...partyArray, ...value.data(), id: compID } as PartyContextType)
     : partyArray;
 
+  const refreshPartyData = async () => {
+    await mutate();
+  };
+
   const addEvent = async (event: Omit<EventData, 'id'>) => {
     if (!compID || compID === '00') return;
     const newEvent: EventData = { ...event, id: crypto.randomUUID() };
@@ -228,6 +233,7 @@ export function PartySettingsProvider({ children }: { children: ReactNode }) {
   const contextValue: ReturnPartyContextType = {
     ...party,
     setCompID,
+    refreshPartyData,
     addEvent,
     addEvents,
     updateEvent,

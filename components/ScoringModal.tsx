@@ -73,11 +73,12 @@ export default function ScoringPage({
     };
   }, []);
 
-  const { setCompID } = usePartySettings();
+  const { setCompID, refreshPartyData } = usePartySettings();
   const activeRound = judgingFormat === 'MultiRound'
     ? rounds.find(round => round.id === activeRoundId) ||
       rounds.find(round => round.status === 'active')
     : undefined;
+  const resolvedActiveRoundId = activeRound?.id;
   const activeRoundTeamIds = useMemo(
     () => activeRound?.eligibleTeamIds.length ? activeRound.eligibleTeamIds : teams.map(team => team.id),
     [activeRound, teams]
@@ -99,6 +100,7 @@ export default function ScoringPage({
   const scoringDances = activeRound
     ? dances.filter(dance => activeRoundDanceIds.includes(dance.id))
     : dances;
+  const firstScoringDanceId = scoringDances[0]?.id || '';
   const scoringJudges = activeRound
     ? judges.filter(judge => activeRoundJudgeIds.includes(judge.id))
     : judges;
@@ -115,6 +117,7 @@ export default function ScoringPage({
   );
   const [localScores, setLocalScores] = useState<Record<string, ScoreValue>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [hasBackup, setHasBackup] = useState(false);
@@ -130,9 +133,18 @@ export default function ScoringPage({
 
   useEffect(() => {
     if (activeRound && !activeRoundDanceIds.includes(currentDanceId)) {
-      setCurrentDanceId(activeRoundDanceIds[0] || '');
+      setCurrentDanceId(firstScoringDanceId);
     }
-  }, [activeRound, activeRoundDanceIds, currentDanceId]);
+  }, [activeRound, activeRoundDanceIds, currentDanceId, firstScoringDanceId]);
+
+  // A dance can be shared by consecutive rounds, so validity alone is not
+  // enough to reset the judge's position. Start every newly active round on
+  // its first configured dance.
+  useEffect(() => {
+    if (resolvedActiveRoundId) {
+      setCurrentDanceId(firstScoringDanceId);
+    }
+  }, [resolvedActiveRoundId, firstScoringDanceId]);
 
   useEffect(() => {
     if (partyID) {
@@ -190,6 +202,18 @@ export default function ScoringPage({
     // Re-sync with DB
     const dbScores = effectiveScores[currentDanceId]?.[currentJudgeId] || {};
     setLocalScores(dbScores);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setSaveError(null);
+    try {
+      await refreshPartyData();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not refresh scoring data.');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const isFinalized = (judgeId: string) => {
@@ -431,6 +455,14 @@ export default function ScoringPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="bg-white border border-stone-200 text-stone-700 text-sm font-bold rounded-2xl px-4 py-2 hover:bg-stone-50 disabled:cursor-wait disabled:opacity-60"
+          >
+            {isRefreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
           <div className="bg-violet-100 text-violet-800 px-4 py-2 rounded-2xl text-sm font-bold border border-violet-200">
             {activeRound ? activeRound.name : `Format: ${judgingFormat}`}
           </div>

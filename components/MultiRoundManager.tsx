@@ -80,8 +80,13 @@ export default function MultiRoundManager(props: Props) {
       if (!next || next.points !== item.points) validCutoffs.push(index + 1);
     });
 
+    // Do not offer the planned count when its boundary splits a tie. In that
+    // case the exact cutoff jumps from the end of the preceding score group to
+    // the end of the tied group, skipping the target entirely.
+    const targetSplitsTie = target < totals.length &&
+      totals[target - 1].points === totals[target].points;
     const below = validCutoffs.filter(count => count < target).slice(-2);
-    const original = validCutoffs.includes(target) ? [target] : [];
+    const original = !targetSplitsTie && validCutoffs.includes(target) ? [target] : [];
     const above = validCutoffs.filter(count => count > target).slice(0, 2);
     return [...below, ...original, ...above];
   };
