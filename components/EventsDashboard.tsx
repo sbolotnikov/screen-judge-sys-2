@@ -309,14 +309,14 @@ export default function EventsDashboard({ id }: { id?: string }) {
                   className="block bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 relative group border border-stone-200/60 hover:border-violet-200 cursor-pointer"
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-violet-50 rounded-2xl group-hover:bg-violet-100 transition-colors">
+                    <div className="flex min-w-0 flex-1 items-center space-x-4 pr-20">
+                      <div className="shrink-0 p-3 bg-violet-50 rounded-2xl group-hover:bg-violet-100 transition-colors">
                         <Icon
                           name="Calendar"
                           className="h-7 w-7 text-violet-600"
                         />
                       </div>
-                      <h2 className="text-xl font-bold text-stone-900 truncate pr-8">
+                      <h2 className="min-w-0 whitespace-normal break-words text-xl font-bold text-stone-900">
                         {event.name || 'Unnamed Event'}
                       </h2>
                     </div>
@@ -391,14 +391,14 @@ export default function EventsDashboard({ id }: { id?: string }) {
                 className="block bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 relative group border border-stone-200/60 hover:border-violet-200 cursor-pointer"
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-violet-50 rounded-2xl group-hover:bg-violet-100 transition-colors">
+                  <div className="flex min-w-0 flex-1 items-center space-x-4 pr-20">
+                    <div className="shrink-0 p-3 bg-violet-50 rounded-2xl group-hover:bg-violet-100 transition-colors">
                       <Icon
                         name="Calendar"
                         className="h-7 w-7 text-violet-600"
                       />
                     </div>
-                    <h2 className="text-xl font-bold text-stone-900 truncate pr-8">
+                    <h2 className="min-w-0 whitespace-normal break-words text-xl font-bold text-stone-900">
                       {event.name || 'Unnamed Event'}
                     </h2>
                   </div>

@@ -253,7 +253,7 @@ function MultiRoundResults({
                           <div className="absolute left-0 h-2 bg-violet-300 rounded-full transition-all duration-700" style={{ width: `${percentage}%` }} />
                           <div className="absolute flex items-center gap-3 transition-all duration-700" style={{ left: `${percentage}%`, transform: 'translateX(-50%)' }}>
                             <span className="w-10 h-10 rounded-full bg-white border-2 border-violet-300 shadow flex items-center justify-center font-black text-violet-700">{item.rank}</span>
-                            <div className="bg-white/95 border border-stone-200 rounded-xl px-3 py-2 shadow-sm min-w-28">
+                            <div className="bg-stone-600/95 border border-stone-300 rounded-xl px-3 py-2 shadow-sm min-w-28">
                               <p className="font-bold text-stone-800 truncate">{item.team.name || item.team.id}</p>
                               <p className="text-xs font-black text-violet-700">{item.score} points</p>
                             </div>
