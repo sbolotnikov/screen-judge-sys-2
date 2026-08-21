@@ -27,6 +27,15 @@ type ResultsThemeProps = {
   textColor?: string;
 };
 
+type ResultsTypographyProps = {
+  fontSize?: number;
+  fontSize2?: number;
+  fontSizeTime?: number;
+};
+
+const fontSizeStyle = (size?: number): CSSProperties | undefined =>
+  size && size > 0 ? { fontSize: `${size}px` } : undefined;
+
 const resultsTheme = (colorBG = '#ffffff', textColor = '#1c1917') =>
   ({
     '--results-bg': colorBG || '#ffffff',
@@ -49,7 +58,7 @@ export default function DisplayCompResults(props: {
   roundFinalized?: EventData['roundFinalized'];
   roundReleasedDances?: EventData['roundReleasedDances'];
   isAnimationOn?: boolean;
-} & ResultsThemeProps) {
+} & ResultsThemeProps & ResultsTypographyProps) {
   if (props.judgingFormat === 'MultiRound') {
     return <MultiRoundResults {...props} />;
   }
@@ -72,6 +81,9 @@ function MultiRoundResults({
   isAnimationOn = true,
   colorBG,
   textColor,
+  fontSize,
+  fontSize2,
+  fontSizeTime,
 }: {
   name: string;
   teams: Team[];
@@ -83,9 +95,18 @@ function MultiRoundResults({
   roundFinalized?: EventData['roundFinalized'];
   roundReleasedDances?: EventData['roundReleasedDances'];
   isAnimationOn?: boolean;
-} & ResultsThemeProps) {
+} & ResultsThemeProps & ResultsTypographyProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const preliminaryNameSize = fontSize && fontSize > 0 ? fontSize : 16;
+  const preliminaryLabelSize = fontSize2 && fontSize2 > 0 ? fontSize2 : 12;
+  const preliminaryRankSize = Math.max(40, preliminaryLabelSize * 1.8);
+  const preliminaryTrackHeight = Math.max(
+    80,
+    preliminaryNameSize + preliminaryLabelSize + 32,
+    preliminaryRankSize + 16,
+  );
+  const preliminaryTrackGap = Math.max(28, preliminaryLabelSize * 0.75);
   const autoScrollContentKey = JSON.stringify({
     scores: roundScores,
     releases: roundReleasedDances,
@@ -120,17 +141,17 @@ function MultiRoundResults({
     return (
       <div ref={scrollContainerRef} className="display-comp-results w-full h-screen overflow-y-auto scrollbar-hide p-2" style={resultsTheme(colorBG, textColor)}>
         <div ref={contentRef} className="space-y-8 pb-10">
-          <ResultsHeader name={name} selectedDanceName={`${activeRound.name} qualifiers`} />
+          <ResultsHeader name={name} selectedDanceName={`${activeRound.name} qualifiers`} fontSize2={fontSize2} fontSizeTime={fontSizeTime} />
           <section className="bg-white rounded-3xl border border-stone-200 p-8 shadow-sm">
             <div className="text-center mb-7">
-              <h2 className="text-3xl font-black text-stone-900">Couples advancing to {activeRound.name}</h2>
-              <p className="text-stone-500 mt-2">Listed alphabetically until results from this round are released.</p>
+              <h2 className="text-3xl font-black text-stone-900" style={fontSizeStyle(fontSizeTime)}>Couples advancing to {activeRound.name}</h2>
+              <p className="text-stone-500 mt-2" style={fontSizeStyle(fontSize2)}>Listed alphabetically until results from this round are released.</p>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {qualifiedTeams.map((team, index) => (
                 <div key={team.id} className="flex items-center gap-4 rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
-                  <span className="w-10 h-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-black">{index + 1}</span>
-                  <span className="text-lg font-bold text-stone-900">{team.name || team.id}</span>
+                  <span className="w-10 h-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-black" style={fontSizeStyle(fontSize2)}>{index + 1}</span>
+                  <span className="text-lg font-bold text-stone-900" style={fontSizeStyle(fontSize)}>{team.name || team.id}</span>
                 </div>
               ))}
             </div>
@@ -164,6 +185,9 @@ function MultiRoundResults({
         isAnimationOn={isAnimationOn}
         colorBG={colorBG}
         textColor={textColor}
+        fontSize={fontSize}
+        fontSize2={fontSize2}
+        fontSizeTime={fontSizeTime}
       />
     );
   }
@@ -180,7 +204,7 @@ function MultiRoundResults({
   return (
     <div ref={scrollContainerRef} className="display-comp-results w-full h-screen overflow-y-auto scrollbar-hide p-2" style={resultsTheme(colorBG, textColor)}>
       <div ref={contentRef} className="space-y-8 pb-10">
-        <ResultsHeader name={name} selectedDanceName="Released round results" />
+        <ResultsHeader name={name} selectedDanceName="Released round results" fontSize2={fontSize2} fontSizeTime={fontSizeTime} />
         {releasedRounds.map(round => {
           const eligibleTeamIds = round.eligibleTeamIds.length
             ? round.eligibleTeamIds
@@ -236,26 +260,31 @@ function MultiRoundResults({
           return (
             <section key={round.id} className="bg-white rounded-3xl border border-stone-200 p-7 shadow-sm">
               <div className="flex flex-wrap items-end justify-between gap-2 mb-5">
-                <div><h2 className="text-2xl font-bold text-stone-900">{round.name}</h2><p className="text-sm text-stone-500">{round.type === 'preliminary' ? 'More selections rank higher' : 'Final ranking — lower total ranks higher'}</p></div>
-                <span className="text-sm text-violet-700 font-bold">{releasedDanceIds.map(id => dances.find(dance => dance.id === id)?.name).filter(Boolean).join(' · ')}</span>
+                <div><h2 className="text-2xl font-bold text-stone-900" style={fontSizeStyle(fontSizeTime)}>{round.name}</h2><p className="text-sm text-stone-500" style={fontSizeStyle(fontSize2)}>{round.type === 'preliminary' ? 'More selections rank higher' : 'Final ranking — lower total ranks higher'}</p></div>
+                <span className="text-sm text-violet-700 font-bold" style={fontSizeStyle(fontSize2)}>{releasedDanceIds.map(id => dances.find(dance => dance.id === id)?.name).filter(Boolean).join(' · ')}</span>
               </div>
               {round.type === 'preliminary' ? (
                 <div className="relative pt-8 pb-10 px-5 border-2 border-dashed border-stone-200 rounded-3xl bg-stone-50/50 overflow-hidden">
                   <StartLine />
                   <FinishLine />
-                  <div className="space-y-7 relative z-10">
+                  <div className="relative z-10 flex flex-col" style={{ gap: `${preliminaryTrackGap}px` }}>
                     {totals.map(item => {
                       const maxScore = Math.max(...totals.map(total => total.score), 1);
                       const percentage = (item.score / maxScore) * 75 + 10;
                       return (
-                        <div key={item.team.id} className="relative h-20 flex items-center">
+                        <div key={item.team.id} className="relative flex items-center" style={{ height: `${preliminaryTrackHeight}px` }}>
                           <div className="absolute left-0 right-0 h-2 bg-stone-200 rounded-full" />
                           <div className="absolute left-0 h-2 bg-violet-300 rounded-full transition-all duration-700" style={{ width: `${percentage}%` }} />
                           <div className="absolute flex items-center gap-3 transition-all duration-700" style={{ left: `${percentage}%`, transform: 'translateX(-50%)' }}>
-                            <span className="w-10 h-10 rounded-full bg-white border-2 border-violet-300 shadow flex items-center justify-center font-black text-violet-700">{item.rank}</span>
+                            <span
+                              className="shrink-0 rounded-full bg-white border-2 border-violet-300 shadow flex items-center justify-center font-black text-violet-700"
+                              style={{ ...fontSizeStyle(fontSize2), width: `${preliminaryRankSize}px`, height: `${preliminaryRankSize}px` }}
+                            >
+                              {item.rank}
+                            </span>
                             <div className="bg-stone-600/95 border border-stone-300 rounded-xl px-3 py-2 shadow-sm min-w-28">
-                              <p className="font-bold text-stone-800 truncate">{item.team.name || item.team.id}</p>
-                              <p className="text-xs font-black text-violet-700">{item.score} points</p>
+                              <p className="font-bold text-stone-800 truncate" style={fontSizeStyle(fontSize)}>{item.team.name || item.team.id}</p>
+                              <p className="text-xs font-black text-violet-700" style={fontSizeStyle(fontSize2)}>{item.score} points</p>
                             </div>
                           </div>
                         </div>
@@ -375,6 +404,9 @@ function FinalResultsSkating({
   isAnimationOn = true,
   colorBG,
   textColor,
+  fontSize,
+  fontSize2,
+  fontSizeTime,
 }: {
   name: string;
   scores: EventData['scores'];
@@ -385,7 +417,7 @@ function FinalResultsSkating({
   finalized?: EventData['finalized'];
   releasedDances?: EventData['releasedDances'];
   isAnimationOn?: boolean;
-} & ResultsThemeProps) {
+} & ResultsThemeProps & ResultsTypographyProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -516,6 +548,8 @@ function FinalResultsSkating({
             dances.find((d) => d.id === selectedDanceId)?.name ||
             'Overall Standings'
           }
+          fontSize2={fontSize2}
+          fontSizeTime={fontSize2}
         />
 
         <SkatingBreakdown
@@ -533,6 +567,9 @@ function FinalResultsSkating({
             dances.find((d) => d.id === selectedDanceId)?.name ||
             'Overall Standings'
           }
+          fontSize={fontSize}
+          fontSize2={fontSizeTime}
+          fontSizeTime={fontSize2}
         />
       </div>
     </div>
@@ -701,17 +738,19 @@ function OriginalResults({
 function ResultsHeader({
   name,
   selectedDanceName,
+  fontSize2,
+  fontSizeTime,
 }: {
   name: string;
   selectedDanceName: string;
-}) {
+} & Pick<ResultsTypographyProps, 'fontSize2' | 'fontSizeTime'>) {
   return (
     <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60 flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
-      <h2 className="text-3xl font-bold text-stone-900 tracking-tight flex items-center">
+      <h2 className="text-3xl font-bold text-stone-900 tracking-tight flex items-center" style={fontSizeStyle(fontSizeTime)}>
         <Icon name="Flag" className="mr-3 h-7 w-7 text-violet-600" />
         {name}
       </h2>
-      <p className="block w-full sm:w-64 pl-4 pr-10 py-3 text-base bg-stone-50 font-medium rounded-xl border border-stone-100">
+      <p className="block w-full sm:w-64 pl-4 pr-10 py-3 text-base bg-stone-50 font-medium rounded-xl border border-stone-100" style={fontSizeStyle(fontSize2)}>
         {selectedDanceName}
       </p>
     </div>

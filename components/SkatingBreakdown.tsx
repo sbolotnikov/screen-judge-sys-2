@@ -15,6 +15,9 @@ interface SkatingBreakdownProps {
   finalResults: FinalResult[];
   isAnimationOn: boolean;
   selectedDanceName: string;
+  fontSize?: number;
+  fontSize2?: number;
+  fontSizeTime?: number;
 }
 
 export default function SkatingBreakdown({
@@ -29,6 +32,9 @@ export default function SkatingBreakdown({
   finalResults: results,
   isAnimationOn,
   selectedDanceName,
+  fontSize,
+  fontSize2,
+  fontSizeTime,
 }: SkatingBreakdownProps) {
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -98,12 +104,12 @@ export default function SkatingBreakdown({
   ) => {
     return (
       <div className="mb-10">
-        <h3 className="text-lg font-bold text-violet-600 mb-4 flex items-center gap-3">
+        <h3 className="text-lg font-bold text-violet-600 mb-4 flex items-center gap-3" style={fontSizeTime ? { fontSize: `${fontSizeTime}px` } : undefined}>
           <span className="w-1.5 h-6 bg-violet-500 rounded-full"></span>
           {title}
         </h3>
         <div className="overflow-x-auto bg-stone-50 rounded-2xl border border-stone-200 p-2">
-          <table className="w-full text-[10px] sm:text-xs text-center border-separate border-spacing-0.5">
+          <table className="w-full text-[10px] sm:text-xs text-center border-separate border-spacing-0.5" style={fontSize2 ? { fontSize: `${fontSize2}px` } : undefined}>
             <thead>
               <tr className="text-stone-500 font-bold">
                 <th className="p-2 text-left bg-white rounded-tl-xl border border-stone-200">Cpl</th>
@@ -124,7 +130,7 @@ export default function SkatingBreakdown({
                 const marks = marksSource[r.coupleId] || [];
                 return (
                   <tr key={r.coupleId} className="hover:bg-white group">
-                    <td className="p-2 text-left font-bold text-stone-700 bg-white border border-stone-200">{getTeamName(r.coupleId)}</td>
+                    <td className="p-2 text-left font-bold text-stone-700 bg-white border border-stone-200" style={fontSize ? { fontSize: `${fontSize}px` } : undefined}>{getTeamName(r.coupleId)}</td>
                     {marks.map((m, i) => (
                       <td key={i} className="p-2 text-stone-600 border border-stone-200">
                         {m || '-'}
@@ -203,7 +209,7 @@ export default function SkatingBreakdown({
   const released = dances.filter(d => releasedDances[d.id]);
 
   return (
-    <div className="space-y-8 mt-12">
+    <div className="space-y-8 mt-12" style={fontSize2 ? { fontSize: `${fontSize2}px` } : undefined}>
       <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
          
           <div className="space-y-12">
@@ -232,11 +238,11 @@ export default function SkatingBreakdown({
               <div className="animate-in fade-in duration-500">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="h-px grow bg-stone-200"></div>
-                  <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest">Overall Standings</h3>
+                  <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest" style={fontSizeTime ? { fontSize: `${fontSizeTime}px` } : undefined}>Overall Standings</h3>
                   <div className="h-px grow bg-stone-200"></div>
                 </div>
                 <div className="overflow-x-auto bg-stone-50/50 rounded-2xl border border-stone-200 p-2">
-                  <table className="w-full text-xs text-center border-separate border-spacing-0.5">
+                  <table className="w-full text-xs text-center border-separate border-spacing-0.5" style={fontSize2 ? { fontSize: `${fontSize2}px` } : undefined}>
                     <thead>
                       <tr className="text-stone-500 font-bold">
                         <th className="p-3 text-left bg-white rounded-tl-xl border border-stone-200">Rank</th>
@@ -254,7 +260,7 @@ export default function SkatingBreakdown({
                         return (
                           <tr key={res.coupleId} className="bg-white hover:bg-violet-50/50 transition-colors">
                             <td className="p-3 text-left font-black text-stone-900 border border-stone-200">{formatRank(res.finalRank)}</td>
-                            <td className="p-3 text-left font-bold text-stone-700 border border-stone-200">{getTeamName(res.coupleId)}</td>
+                            <td className="p-3 text-left font-bold text-stone-700 border border-stone-200" style={fontSize ? { fontSize: `${fontSize}px` } : undefined}>{getTeamName(res.coupleId)}</td>
                             {released.map(dance => (
                               <td key={dance.id} className="p-3 text-stone-600 border border-stone-200">
                                 {formatRank(res.dancePlacements[dance.id])}
@@ -282,7 +288,7 @@ export default function SkatingBreakdown({
 
             {(selectedDanceName !== 'Overall Standings' || !isAnimationOn) &&<div className="flex items-center gap-4">
               <div className="h-px grow bg-stone-200"></div>
-              <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest">Individual Dance Tabulations</h3>
+              <h3 className="text-sm font-black text-stone-400 uppercase tracking-widest" style={fontSizeTime ? { fontSize: `${fontSizeTime}px` } : undefined}>Individual Dance Tabulations</h3>
               <div className="h-px grow bg-stone-200"></div>
             </div>}
             

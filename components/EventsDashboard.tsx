@@ -34,6 +34,9 @@ export default function EventsDashboard({ id }: { id?: string }) {
     selectedDanceIdJudge,
     colorBG,
     textColor,
+    fontSize,
+    fontSize2,
+    fontSizeTime,
   } = usePartySettings();
 
   useEffect(() => {
@@ -528,6 +531,9 @@ export default function EventsDashboard({ id }: { id?: string }) {
             isAnimationOn={false}
             colorBG={colorBG}
             textColor={textColor}
+            fontSize={fontSize}
+            fontSize2={fontSize2}
+            fontSizeTime={fontSizeTime}
           />
         </div>
       )}

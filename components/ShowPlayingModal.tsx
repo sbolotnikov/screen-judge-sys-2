@@ -573,6 +573,9 @@ const ShowPlayingModal: React.FC<Props> = ({
                 isAnimationOn={true}
                 colorBG={colorBG}
                 textColor={textColor}
+                fontSize={fontSize}
+                fontSize2={fontSize2}
+                fontSizeTime={fontSizeTime}
               />
             );
           })()}
