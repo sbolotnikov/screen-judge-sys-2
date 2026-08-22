@@ -12,6 +12,7 @@ interface Submission {
   danceId: string;
   judgeId: string;
   roundId?: string;
+  multipleFinalId?: string;
   scores: Record<string, ScoreValue>;
 }
 
@@ -31,10 +32,18 @@ interface StoredEvent {
     selectionCount: number;
     status: 'setup' | 'active' | 'awaiting_advance' | 'completed';
   }>;
+  multipleFinals?: Array<{
+    id: string;
+    teamIds: string[];
+    danceIds: string[];
+    judgeIds: string[];
+  }>;
   scores?: Record<string, Record<string, Record<string, ScoreValue>>>;
   finalized?: Record<string, Record<string, boolean>>;
   roundScores?: Record<string, Record<string, Record<string, Record<string, ScoreValue>>>>;
   roundFinalized?: Record<string, Record<string, Record<string, boolean>>>;
+  multipleFinalScores?: Record<string, Record<string, Record<string, Record<string, ScoreValue>>>>;
+  multipleFinalFinalized?: Record<string, Record<string, Record<string, boolean>>>;
 }
 
 function isValidSubmission(value: unknown): value is Submission {
@@ -44,6 +53,8 @@ function isValidSubmission(value: unknown): value is Submission {
     !body.partyId || !body.eventId || !body.danceId || !body.judgeId ||
     !SAFE_KEY.test(body.eventId) || !SAFE_KEY.test(body.danceId) || !SAFE_KEY.test(body.judgeId) ||
     (body.roundId !== undefined && (!body.roundId || !SAFE_KEY.test(body.roundId))) ||
+    (body.multipleFinalId !== undefined && (!body.multipleFinalId || !SAFE_KEY.test(body.multipleFinalId))) ||
+    (body.roundId !== undefined && body.multipleFinalId !== undefined) ||
     !body.scores || typeof body.scores !== 'object' || Array.isArray(body.scores)
   ) return false;
 
@@ -81,7 +92,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    if (body.roundId) {
+    if (body.multipleFinalId) {
+      const final = existingEvent.multipleFinals?.find(item => item.id === body.multipleFinalId);
+      if (!final || !final.danceIds.includes(body.danceId) || !final.judgeIds.includes(body.judgeId)) {
+        return NextResponse.json({ error: 'Judge is not assigned to this final and dance' }, { status: 403 });
+      }
+      if (existingEvent.multipleFinalFinalized?.[body.multipleFinalId]?.[body.danceId]?.[body.judgeId]) {
+        return NextResponse.json({ error: 'This ballot has already been finalized' }, { status: 409 });
+      }
+      if (Object.keys(body.scores).some(teamId => !final.teamIds.includes(teamId)) || Object.keys(body.scores).length !== final.teamIds.length) {
+        return NextResponse.json({ error: 'Submission must contain every couple in this final' }, { status: 400 });
+      }
+      const ranks = final.teamIds.map(teamId => body.scores[teamId]);
+      const validRanks = ranks.every(mark => typeof mark === 'number' && Number.isInteger(mark) && mark >= 1 && mark <= final.teamIds.length);
+      if (!validRanks || new Set(ranks).size !== final.teamIds.length) {
+        return NextResponse.json({ error: 'Every couple must receive one unique placement' }, { status: 400 });
+      }
+    } else if (body.roundId) {
       const round = existingEvent.rounds?.find(item => item.id === body.roundId);
       const allowedDanceIds = round?.danceIds.length
         ? round.danceIds
@@ -120,12 +147,16 @@ export async function POST(request: Request) {
       }
     }
 
-    const scorePath = body.roundId
-      ? `events.$[event].roundScores.${body.roundId}.${body.danceId}.${body.judgeId}`
-      : `events.$[event].scores.${body.danceId}.${body.judgeId}`;
-    const finalizedPath = body.roundId
-      ? `events.$[event].roundFinalized.${body.roundId}.${body.danceId}.${body.judgeId}`
-      : `events.$[event].finalized.${body.danceId}.${body.judgeId}`;
+    const scorePath = body.multipleFinalId
+      ? `events.$[event].multipleFinalScores.${body.multipleFinalId}.${body.danceId}.${body.judgeId}`
+      : body.roundId
+        ? `events.$[event].roundScores.${body.roundId}.${body.danceId}.${body.judgeId}`
+        : `events.$[event].scores.${body.danceId}.${body.judgeId}`;
+    const finalizedPath = body.multipleFinalId
+      ? `events.$[event].multipleFinalFinalized.${body.multipleFinalId}.${body.danceId}.${body.judgeId}`
+      : body.roundId
+        ? `events.$[event].roundFinalized.${body.roundId}.${body.danceId}.${body.judgeId}`
+        : `events.$[event].finalized.${body.danceId}.${body.judgeId}`;
 
     const result = await parties.updateOne(
       partyQuery(body.partyId),
@@ -145,12 +176,16 @@ export async function POST(request: Request) {
     const party = await parties.findOne(partyQuery(body.partyId), { projection: { events: 1 } });
     const event = (party?.events as StoredEvent[] | undefined)
       ?.find((item) => item.id === body.eventId);
-    const storedScores = body.roundId
-      ? event?.roundScores?.[body.roundId]?.[body.danceId]?.[body.judgeId]
-      : event?.scores?.[body.danceId]?.[body.judgeId];
-    const storedFinalized = body.roundId
-      ? event?.roundFinalized?.[body.roundId]?.[body.danceId]?.[body.judgeId]
-      : event?.finalized?.[body.danceId]?.[body.judgeId];
+    const storedScores = body.multipleFinalId
+      ? event?.multipleFinalScores?.[body.multipleFinalId]?.[body.danceId]?.[body.judgeId]
+      : body.roundId
+        ? event?.roundScores?.[body.roundId]?.[body.danceId]?.[body.judgeId]
+        : event?.scores?.[body.danceId]?.[body.judgeId];
+    const storedFinalized = body.multipleFinalId
+      ? event?.multipleFinalFinalized?.[body.multipleFinalId]?.[body.danceId]?.[body.judgeId]
+      : body.roundId
+        ? event?.roundFinalized?.[body.roundId]?.[body.danceId]?.[body.judgeId]
+        : event?.finalized?.[body.danceId]?.[body.judgeId];
     const verified = storedFinalized === true && JSON.stringify(storedScores) === JSON.stringify(body.scores);
 
     if (!verified) {

@@ -59,6 +59,7 @@ export default function DisplayCompResults(props: {
   roundReleasedDances?: EventData['roundReleasedDances'];
   isAnimationOn?: boolean;
 } & ResultsThemeProps & ResultsTypographyProps) {
+  if (props.judgingFormat === 'MultipleFinals') return null;
   if (props.judgingFormat === 'MultiRound') {
     return <MultiRoundResults {...props} />;
   }

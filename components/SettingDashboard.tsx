@@ -7,6 +7,7 @@ import Image from 'next/image';
 import usePartySettings from '@/hooks/usePartySettings';
 import { BlurInput } from './BlurInput';
 import MultiRoundManager from './MultiRoundManager';
+import MultipleFinalsManager from './MultipleFinalsManager';
 
 /**
  * Settings Page
@@ -28,6 +29,9 @@ export default function SettingsDashboard({
   roundScores = {},
   roundFinalized = {},
   roundReleasedDances = {},
+  multipleFinals = [],
+  multipleFinalScores = {},
+  multipleFinalFinalized = {},
 }: {
   partyID: string;
   id: string;
@@ -44,6 +48,9 @@ export default function SettingsDashboard({
   roundScores?: EventData['roundScores'];
   roundFinalized?: EventData['roundFinalized'];
   roundReleasedDances?: EventData['roundReleasedDances'];
+  multipleFinals?: EventData['multipleFinals'];
+  multipleFinalScores?: EventData['multipleFinalScores'];
+  multipleFinalFinalized?: EventData['multipleFinalFinalized'];
 }) {
   const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
   const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
@@ -69,7 +76,10 @@ export default function SettingsDashboard({
           releasedDances: {},
           roundScores: {},
           roundFinalized: {},
-          roundReleasedDances: {}
+          roundReleasedDances: {},
+          multipleFinalScores: {},
+          multipleFinalFinalized: {},
+          multipleFinals: multipleFinals.map(final => ({ ...final, resultsFinalized: false }))
         });
       } catch (err) {
         console.error('Error clearing marks:', err);
@@ -440,6 +450,7 @@ export default function SettingsDashboard({
               <option value="Original">Original (Gold, Silver, Bronze)</option>
               <option value="Final">Final (Ranking 1 to last)</option>
               <option value="MultiRound">2 rounds and more (Ranking 1 to last)</option>
+              <option value="MultipleFinals">Multiple finals judged together</option>
             </select>
           </div>
         </div>
@@ -691,7 +702,20 @@ export default function SettingsDashboard({
   />
 )}
 
-{judgingFormat !== 'MultiRound' && <>
+{judgingFormat === 'MultipleFinals' && (
+  <MultipleFinalsManager
+    eventId={id}
+    eventName={name}
+    teams={teams}
+    dances={dances}
+    judges={judges}
+    finals={multipleFinals}
+    scores={multipleFinalScores}
+    finalized={multipleFinalFinalized}
+  />
+)}
+
+{judgingFormat !== 'MultiRound' && judgingFormat !== 'MultipleFinals' && <>
 <div className="bg-white shadow-sm sm:rounded-3xl p-8 border border-stone-200/60">
         <div className="flex items-center space-x-3 mb-6">
           <div className="p-2 bg-amber-100 rounded-xl">

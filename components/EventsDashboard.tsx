@@ -15,7 +15,9 @@ import SettingsDashboard from './SettingDashboard';
 import { Team, Dance, Judge, ScoreValue, JudgingFormat, EventData } from '@/types/types';
 import ScoringPage from './ScoringModal';
 import DisplayCompResults from './DisplayCompResults';
+import MultipleFinalsScoring from './MultipleFinalsScoring';
 import usePartySettings from '@/hooks/usePartySettings';
+import { exportEventsResultsPdf } from '@/utils/exportEventsResultsPdf';
 
 /**
  * Dashboard Page
@@ -51,6 +53,8 @@ export default function EventsDashboard({ id }: { id?: string }) {
     useState<JudgingFormat>('Original');
   const [eventID, setEventID] = useState<string | null>(null);
   const [eventToDelete, setEventToDelete] = useState<string | null>(null);
+  const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const downloadJson = (data: unknown, fileName: string) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
@@ -107,7 +111,9 @@ export default function EventsDashboard({ id }: { id?: string }) {
             : crypto.randomUUID();
           const eventId = existingIds.has(importedId) ? crypto.randomUUID() : importedId;
           existingIds.add(eventId);
-          const judgingFormat = importedEvent.judgingFormat === 'MultiRound' ||
+          const judgingFormat = importedEvent.judgingFormat === 'MultipleFinals'
+            ? 'MultipleFinals'
+            : importedEvent.judgingFormat === 'MultiRound' ||
             String(importedEvent.judgingFormat || '').toLowerCase().includes('round')
             ? 'MultiRound'
             : importedEvent.judgingFormat === 'Final' ? 'Final' : 'Original';
@@ -142,6 +148,9 @@ export default function EventsDashboard({ id }: { id?: string }) {
             roundScores: importedEvent.roundScores || {},
             roundFinalized: importedEvent.roundFinalized || {},
             roundReleasedDances: importedEvent.roundReleasedDances || {},
+            multipleFinals: importedEvent.multipleFinals || [],
+            multipleFinalScores: importedEvent.multipleFinalScores || {},
+            multipleFinalFinalized: importedEvent.multipleFinalFinalized || {},
           };
         });
 
@@ -181,6 +190,20 @@ export default function EventsDashboard({ id }: { id?: string }) {
     downloadJson(event, `event_${event.name?.replace(/\s+/g, '_') || event.id}.json`);
   };
 
+  const handleExportSelectedResults = async () => {
+    const selectedEvents = events.filter(event => selectedEventIds.includes(event.id));
+    if (!selectedEvents.length) return;
+    setIsExportingPdf(true);
+    try {
+      await exportEventsResultsPdf(selectedEvents);
+    } catch (err) {
+      console.error('Error generating combined PDF:', err);
+      alert('Failed to generate the PDF. Please try again.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   /**
    * Handles the creation of a new event in the events array.
    */
@@ -196,6 +219,9 @@ export default function EventsDashboard({ id }: { id?: string }) {
         judges: [],
         judgingFormat: newJudgingFormat,
         scores: {},
+        multipleFinals: [],
+        multipleFinalScores: {},
+        multipleFinalFinalized: {},
       });
       setIsCreateModalOpen(false);
       setNewEventName('');
@@ -246,6 +272,14 @@ export default function EventsDashboard({ id }: { id?: string }) {
               (session.user as SessionUser).role === 'User') && eventID == null && (
               <>
                 <button
+                  onClick={handleExportSelectedResults}
+                  disabled={selectedEventIds.length === 0 || isExportingPdf}
+                  className="inline-flex items-center px-4 py-2.5 border border-green-200 text-sm font-medium rounded-full text-green-700 bg-green-50 hover:bg-green-100 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Icon name="Download" className="mr-2 h-5 w-5" />
+                  {isExportingPdf ? 'Creating PDF…' : `Results PDF (${selectedEventIds.length})`}
+                </button>
+                <button
                   onClick={handleExportAll}
                   disabled={events.length === 0}
                   className="inline-flex items-center px-4 py-2.5 border border-stone-200 text-sm font-medium rounded-full text-stone-700 bg-white hover:bg-stone-50 shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -293,93 +327,52 @@ export default function EventsDashboard({ id }: { id?: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3">
         {session && (session.user as SessionUser).role === 'Judge' ? (
            eventID == null ? 
           (events
             .filter((event) =>
-              event.judges.some((judge) => judge.id === user?.id) ||
-              event.rounds?.some(round => round.judgeIds.includes(user?.id || '')),
+              event.judgingFormat === 'MultipleFinals'
+                ? event.multipleFinals?.some(final => final.judgeIds.includes(user?.id || ''))
+                : event.judges.some((judge) => judge.id === user?.id) ||
+                  event.rounds?.some(round => round.judgeIds.includes(user?.id || '')),
             )
             .map((event) => {
               return (
-                <div
+                <button
+                  type="button"
                   key={event.id}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setEventID(event.id);
-                  }}
-                  className="block bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 relative group border border-stone-200/60 hover:border-violet-200 cursor-pointer"
+                  onClick={() => setEventID(event.id)}
+                  className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-left shadow-sm transition-all hover:border-violet-300 hover:bg-violet-50/30 hover:shadow-md sm:grid-cols-[auto_minmax(0,1fr)_110px_110px_auto]"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex min-w-0 flex-1 items-center space-x-4 pr-20">
-                      <div className="shrink-0 p-3 bg-violet-50 rounded-2xl group-hover:bg-violet-100 transition-colors">
-                        <Icon
-                          name="Calendar"
-                          className="h-7 w-7 text-violet-600"
-                        />
-                      </div>
-                      <h2 className="min-w-0 whitespace-normal break-words text-xl font-bold text-stone-900">
-                        {event.name || 'Unnamed Event'}
-                      </h2>
-                    </div>
-                    <div className="absolute top-6 right-6 flex space-x-2">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleExportEvent(event);
-                        }}
-                        className="p-2 text-stone-400 hover:text-violet-600 hover:bg-violet-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                        title="Export Event"
-                      >
-                        <Icon name="Download" className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setEventToDelete(event.id);
-                        }}
-                        className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                        title="Delete Event"
-                      >
-                        <Icon name="Trash2" className="h-5 w-5" />
-                      </button>
+                  <div className="shrink-0 rounded-lg bg-violet-50 p-2 group-hover:bg-violet-100">
+                    <Icon name="Calendar" className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-bold text-stone-900 sm:text-lg">
+                      {event.name || 'Unnamed Event'}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-stone-500">
+                      {event.judgingFormat || 'Original'}
+                    </p>
+                    <div className="mt-1 flex gap-3 text-xs text-stone-500 sm:hidden">
+                      <span>{event.teams?.length || 0} teams</span>
+                      <span>{event.dances?.length || 0} dances</span>
                     </div>
                   </div>
-
-                  <div className="mt-6 grid grid-cols-3 gap-4 border-t border-stone-100 pt-6">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-stone-900">
-                        {event.teams?.length || 0}
-                      </p>
-                      <p className="text-xs font-medium text-stone-500 uppercase tracking-wider mt-1">
-                        Teams
-                      </p>
-                    </div>
-                    <div className="text-center border-l border-r border-stone-100">
-                      <p className="text-2xl font-bold text-stone-900">
-                        {event.dances?.length || 0}
-                      </p>
-                      <p className="text-xs font-medium text-stone-500 uppercase tracking-wider mt-1">
-                        Dances
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-stone-900">
-                        {event.judges?.length || 0}
-                      </p>
-                      <p className="text-xs font-medium text-stone-500 uppercase tracking-wider mt-1">
-                        Judges
-                      </p>
-                    </div>
+                  <div className="hidden text-center sm:block">
+                    <p className="font-bold text-stone-900">{event.teams?.length || 0}</p>
+                    <p className="text-xs uppercase tracking-wide text-stone-500">Teams</p>
                   </div>
-                  <div className="mt-6 flex items-center text-violet-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    Manage Event{' '}
-                    <Icon name="ChevronRight" className="ml-1 h-4 w-4" />
+                  <div className="hidden border-l border-stone-100 text-center sm:block">
+                    <p className="font-bold text-stone-900">{event.dances?.length || 0}</p>
+                    <p className="text-xs uppercase tracking-wide text-stone-500">Dances</p>
                   </div>
-                </div>
+                  <span className="inline-flex items-center gap-1 font-medium text-violet-600">
+                    <span className="hidden sm:inline">Open</span>
+                    <Icon name="ChevronRight" className="h-5 w-5" />
+                  </span>
+                </button>
               );
             })):(<></>)
         ) : eventID == null ? (
@@ -391,10 +384,20 @@ export default function EventsDashboard({ id }: { id?: string }) {
                   e.preventDefault();
                   setEventID(event.id);
                 }}
-                className="block bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 relative group border border-stone-200/60 hover:border-violet-200 cursor-pointer"
+                className="block bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 relative group border border-stone-200/60 hover:border-violet-200 cursor-pointer"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex min-w-0 flex-1 items-center space-x-4 pr-20">
+                    <input
+                      type="checkbox"
+                      checked={selectedEventIds.includes(event.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setSelectedEventIds(current => e.target.checked
+                        ? [...current, event.id]
+                        : current.filter(id => id !== event.id))}
+                      className="h-5 w-5 shrink-0 accent-violet-600"
+                      aria-label={`Select ${event.name || 'Unnamed Event'} for PDF export`}
+                    />
                     <div className="shrink-0 p-3 bg-violet-50 rounded-2xl group-hover:bg-violet-100 transition-colors">
                       <Icon
                         name="Calendar"
@@ -431,7 +434,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
                   </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-3 gap-4 border-t border-stone-100 pt-6">
+                <div className="mt-4 grid grid-cols-3 gap-4 border-t border-stone-100 pt-4 sm:absolute sm:right-32 sm:top-3 sm:mt-0 sm:w-72 sm:border-0 sm:pt-0">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-stone-900">
                       {event.teams?.length || 0}
@@ -461,7 +464,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
                 {session?.user &&
                   ((session.user as SessionUser).role === 'Admin' ||
                     (session.user as SessionUser).role === 'User') && (
-                    <div className="mt-6 flex items-center text-violet-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="mt-3 flex items-center text-violet-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                       Manage Event{' '}
                       <Icon name="ChevronRight" className="ml-1 h-4 w-4" />
                     </div>
@@ -512,8 +515,11 @@ export default function EventsDashboard({ id }: { id?: string }) {
             roundScores={selectedEvent?.roundScores}
             roundFinalized={selectedEvent?.roundFinalized}
             roundReleasedDances={selectedEvent?.roundReleasedDances}
+            multipleFinals={selectedEvent?.multipleFinals}
+            multipleFinalScores={selectedEvent?.multipleFinalScores}
+            multipleFinalFinalized={selectedEvent?.multipleFinalFinalized}
           />
-          <DisplayCompResults
+          {selectedEvent?.judgingFormat !== 'MultipleFinals' && <DisplayCompResults
             name={eventName}
             scores={scores}
             teams={teams}
@@ -534,12 +540,21 @@ export default function EventsDashboard({ id }: { id?: string }) {
             fontSize={fontSize}
             fontSize2={fontSize2}
             fontSizeTime={fontSizeTime}
-          />
+          />}
         </div>
       )}
       {eventID && user?.role === 'Judge' && (
         <div className="mt-1 w-full">
-          <ScoringPage
+          {selectedEvent?.judgingFormat === 'MultipleFinals' ? <MultipleFinalsScoring
+            partyId={id!}
+            eventId={eventID}
+            judgeId={user.id}
+            teams={teams}
+            dances={dances}
+            finals={selectedEvent.multipleFinals || []}
+            scores={selectedEvent.multipleFinalScores || {}}
+            finalized={selectedEvent.multipleFinalFinalized || {}}
+          /> : <ScoringPage
             partyID={id!}
             id={eventID}
             scores={scores}
@@ -554,7 +569,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
             activeRoundId={selectedEvent?.activeRoundId}
             roundScores={selectedEvent?.roundScores}
             roundFinalized={selectedEvent?.roundFinalized}
-          />
+          />}
         </div>
       )}
       {/* Create Modal */}
@@ -611,6 +626,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
                   </option>
                   <option value="Final">Final (Ranking 1 to last)</option>
                   <option value="MultiRound">2 rounds and more (Ranking 1 to last)</option>
+                  <option value="MultipleFinals">Multiple finals judged together</option>
                 </select>
               </div>
               <div className="flex justify-end space-x-3">
