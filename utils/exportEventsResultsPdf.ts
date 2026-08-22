@@ -100,7 +100,8 @@ function addMultipleFinals(doc: PdfDocument, autoTable: AutoTable, event: EventD
     doc.setFontSize(15); doc.text(final.name, 14, index ? 27 : 34);
     const teams = event.teams.filter(team => final.teamIds.includes(team.id));
     const finalScores = event.multipleFinalScores?.[final.id] || {};
-    const calculated = addSkatingSummary(doc, autoTable, event, teams, final.danceIds, final.judgeIds, finalScores, index ? 33 : 40);
+    const summaryStartY = addJudgeLegend(doc, event, final.judgeIds, index ? 33 : 40);
+    const calculated = addSkatingSummary(doc, autoTable, event, teams, final.danceIds, final.judgeIds, finalScores, summaryStartY);
     addMultipleFinalBreakdowns(doc, autoTable, event, final.name, teams, final.danceIds, final.judgeIds, finalScores, calculated.danceResults, calculated.results);
   });
 }
@@ -145,8 +146,9 @@ function addMultipleFinalBreakdowns(
     doc.addPage();
     doc.setFontSize(16);
     doc.text(`${event.name || 'Event'} - ${finalName} - Dance Tabulation: ${event.dances.find(dance => dance.id === danceId)?.name || danceId}`, 14, 18);
+    const startY = addJudgeLegend(doc, event, judgeIds, 24);
     autoTable(doc, {
-      startY: 24,
+      startY,
       head: [['Couple', ...judgeIds.map((_, index) => `J${index + 1}`), ...teams.map((_, index) => `1-${index + 1}`), 'Place']],
       body: [...(danceResults[danceId] || [])].sort((a, b) => a.rank - b.rank).map(placement => {
         const marks = judgeIds.map(judgeId => scores[danceId]?.[judgeId]?.[placement.coupleId]);
@@ -172,8 +174,9 @@ function addMultipleFinalBreakdowns(
     doc.addPage();
     doc.setFontSize(16);
     doc.text(`${event.name || 'Event'} - ${finalName} - Rule 10: Better Dance Majority`, 14, 18);
+    const startY = addJudgeLegend(doc, event, judgeIds, 24);
     autoTable(doc, {
-      startY: 24,
+      startY,
       head: [['Couple', ...danceIds.map(id => event.dances.find(dance => dance.id === id)?.name || id), ...teams.map((_, index) => `1-${index + 1}`), 'Sum']],
       body: [...results].sort((a, b) => a.totalScore - b.totalScore || a.finalRank - b.finalRank).map(result => {
         const dancePlaces = danceIds.map(id => result.dancePlacements[id]);
@@ -197,8 +200,9 @@ function addMultipleFinalBreakdowns(
     doc.addPage();
     doc.setFontSize(16);
     doc.text(`${event.name || 'Event'} - ${finalName} - Rule 11: Grand Tabulation`, 14, 18);
+    const startY = addJudgeLegend(doc, event, judgeIds, 24);
     autoTable(doc, {
-      startY: 24,
+      startY,
       head: [['Couple', ...danceIds.flatMap((_, danceIndex) => judgeIds.map((__, judgeIndex) => `D${danceIndex + 1}-J${judgeIndex + 1}`)), ...teams.map((_, index) => `1-${index + 1}`), 'Result']],
       body: rule11Results.map(result => {
         const allMarks = danceIds.flatMap(danceId => judgeIds.map(judgeId => {
@@ -219,6 +223,15 @@ function addMultipleFinalBreakdowns(
       theme: 'grid', styles: { fontSize: 6 }, headStyles: { fillColor: [124, 58, 237] },
     });
   }
+}
+
+function addJudgeLegend(doc: PdfDocument, event: EventData, judgeIds: string[], y: number) {
+  const legend = judgeIds.map((id, index) =>
+    `J${index + 1} - ${event.judges.find(judge => judge.id === id)?.name || id}`).join(' | ');
+  doc.setFontSize(9);
+  const lines = doc.splitTextToSize(`Judges: ${legend || 'None assigned'}`, doc.internal.pageSize.getWidth() - 28);
+  doc.text(lines, 14, y);
+  return y + lines.length * 4 + 2;
 }
 
 function addEmptyMessage(doc: PdfDocument, message: string, y = 34) {

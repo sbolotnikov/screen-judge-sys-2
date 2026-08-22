@@ -88,8 +88,12 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
       const calculated = resultsFor(final);
       doc.setFontSize(18);
       doc.text(`${eventName} - ${final.name}`, 14, 18);
+      const judgeLegend = final.judgeIds.map((id, index) => `J${index + 1} - ${judges.find(judge => judge.id === id)?.name || id}`).join(' | ');
+      doc.setFontSize(9);
+      const judgeLegendLines = doc.splitTextToSize(`Judges: ${judgeLegend || 'None assigned'}`, doc.internal.pageSize.getWidth() - 28);
+      doc.text(judgeLegendLines, 14, 24);
       autoTable(doc, {
-        startY: 24,
+        startY: 26 + judgeLegendLines.length * 4,
         head: [['Place', 'Couple', ...final.danceIds.map(id => dances.find(dance => dance.id === id)?.name || id), 'Total']],
         body: calculated.finalResults.map(result => [
           result.finalRank,
@@ -103,9 +107,11 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
         doc.addPage();
         doc.setFontSize(16);
         doc.text(`${final.name} - Dance Tabulation: ${dances.find(dance => dance.id === danceId)?.name || danceId}`, 14, 18);
+        doc.setFontSize(9);
+        doc.text(judgeLegendLines, 14, 24);
         const placements = calculated.danceResults[danceId] || [];
         autoTable(doc, {
-          startY: 24,
+          startY: 26 + judgeLegendLines.length * 4,
           head: [['Couple', ...final.judgeIds.map((_, index) => `J${index + 1}`), ...calculated.finalTeams.map((_, index) => `1-${index + 1}`), 'Place']],
           body: [...placements].sort((a, b) => a.rank - b.rank).map(placement => {
             const marks = final.judgeIds.map(judgeId => scores[final.id]?.[danceId]?.[judgeId]?.[placement.coupleId]);
@@ -133,8 +139,10 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
           doc.addPage();
           doc.setFontSize(16);
           doc.text(`${final.name} - Rule 10: Better Dance Majority`, 14, 18);
+          doc.setFontSize(9);
+          doc.text(judgeLegendLines, 14, 24);
           autoTable(doc, {
-            startY: 24,
+            startY: 26 + judgeLegendLines.length * 4,
             head: [['Couple', ...final.danceIds.map(id => dances.find(dance => dance.id === id)?.name || id), ...calculated.finalTeams.map((_, index) => `1-${index + 1}`), 'Sum']],
             body: [...calculated.finalResults].sort((a, b) => a.totalScore - b.totalScore || a.finalRank - b.finalRank).map(result => {
               const dancePlaces = final.danceIds.map(id => result.dancePlacements[id]);
@@ -160,8 +168,10 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
           doc.addPage();
           doc.setFontSize(16);
           doc.text(`${final.name} - Rule 11: Grand Tabulation`, 14, 18);
+          doc.setFontSize(9);
+          doc.text(judgeLegendLines, 14, 24);
           autoTable(doc, {
-            startY: 24,
+            startY: 26 + judgeLegendLines.length * 4,
             head: [['Couple', ...final.danceIds.flatMap((_, danceIndex) => final.judgeIds.map((__, judgeIndex) => `D${danceIndex + 1}-J${judgeIndex + 1}`)), ...calculated.finalTeams.map((_, index) => `1-${index + 1}`), 'Result']],
             body: rule11Results.map(result => {
               const allMarks = final.danceIds.flatMap(danceId => final.judgeIds.map(judgeId => {
@@ -215,6 +225,12 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
             <ChoiceList title="Couples" items={teams} selected={final.teamIds} disabledIds={couplesInOtherFinals} disabledText="Assigned to another final" onToggle={id => updateFinal(final.id, { teamIds: toggleId(final.teamIds, id), resultsFinalized: false })} />
             <ChoiceList title="Dances" items={dances} selected={final.danceIds} onToggle={id => updateFinal(final.id, { danceIds: toggleId(final.danceIds, id), resultsFinalized: false })} />
             <ChoiceList title="Judges" items={judges} selected={final.judgeIds} onToggle={id => updateFinal(final.id, { judgeIds: toggleId(final.judgeIds, id), resultsFinalized: false })} />
+          </div>
+          <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-3">
+            <h3 className="mb-2 text-xs font-black uppercase tracking-wider text-violet-700">Judge Key</h3>
+            <div className="flex flex-wrap gap-2">{final.judgeIds.map((judgeId, index) => (
+              <span key={judgeId} className="rounded-full bg-white px-3 py-1 text-sm font-bold text-stone-700 shadow-sm">J{index + 1} - {judges.find(judge => judge.id === judgeId)?.name || judgeId}</span>
+            ))}{final.judgeIds.length === 0 && <span className="text-sm text-stone-500">No judges assigned</span>}</div>
           </div>
           <div>
             <h3 className="mb-2 font-bold">Judge status</h3>
