@@ -17,6 +17,7 @@ const EMPTY_ROUND_FINALIZED: NonNullable<EventData['roundFinalized']> = {};
 export default function ScoringPage({
   partyID, 
   id,
+  eventName,
   scores,
   finalized,
   teams,
@@ -29,9 +30,12 @@ export default function ScoringPage({
   activeRoundId,
   roundScores = EMPTY_ROUND_SCORES,
   roundFinalized = EMPTY_ROUND_FINALIZED,
+  onPreviousEvent,
+  onNextEvent,
 }: {
   partyID: string;
   id: string;
+  eventName: string;
   scores: EventData['scores'];
   finalized?: EventData['finalized'];
   teams: Team[];
@@ -44,6 +48,8 @@ export default function ScoringPage({
   activeRoundId?: string;
   roundScores?: EventData['roundScores'];
   roundFinalized?: EventData['roundFinalized'];
+  onPreviousEvent?: () => void;
+  onNextEvent?: () => void;
 }) {
   const scoringPageRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +103,11 @@ export default function ScoringPage({
   const scoringTeams = activeRound
     ? teams.filter(team => activeRoundTeamIds.includes(team.id)).slice(0, activeRoundCompetitorCount)
     : teams;
+  const sortedScoringTeams = useMemo(
+    () => [...scoringTeams].sort((a, b) =>
+      (a.name || a.id).localeCompare(b.name || b.id, undefined, { numeric: true, sensitivity: 'base' })),
+    [scoringTeams]
+  );
   const scoringDances = activeRound
     ? dances.filter(dance => activeRoundDanceIds.includes(dance.id))
     : dances;
@@ -405,11 +416,21 @@ export default function ScoringPage({
     return null;
   })();
 
+  const previousDanceId = (() => {
+    const currentIndex = scoringDances.findIndex(d => d.id === currentDanceId);
+    return currentIndex > 0 ? scoringDances[currentIndex - 1].id : null;
+  })();
+
+  const navigateToDance = (danceId: string | null) => {
+    if (!danceId) return;
+    setCurrentDanceId(danceId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const navigatePrevious = () => previousDanceId ? navigateToDance(previousDanceId) : onPreviousEvent?.();
+  const navigateNext = () => nextDanceId ? navigateToDance(nextDanceId) : onNextEvent?.();
+
   const handleNextDance = () => {
-    if (nextDanceId) {
-      setCurrentDanceId(nextDanceId);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    navigateNext();
   };
 
   if (judgingFormat === 'MultiRound' && !activeRound) {
@@ -437,15 +458,16 @@ export default function ScoringPage({
     );
   }
 
-  const unrankedTeams = scoringTeams.filter(t => localScores[t.id] === null || localScores[t.id] === undefined);
+  const unrankedTeams = sortedScoringTeams.filter(t => localScores[t.id] === null || localScores[t.id] === undefined);
 
   return (
     <div ref={scoringPageRef} className="space-y-10 pb-5 overscroll-y-none">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-extrabold text-stone-900 tracking-tight">
-            Scoring
+            {eventName || 'Event'}
           </h1>
+          <p className="mt-1 text-sm font-bold uppercase tracking-wider text-violet-600">Judging Ballot</p>
           <p className="mt-2 text-stone-500 text-lg">
             {activeRound?.type === 'preliminary'
               ? `Choose exactly ${activeRound.selectionCount} couples. Each selection is one point.`
@@ -455,6 +477,22 @@ export default function ScoringPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={navigatePrevious}
+            disabled={!previousDanceId && !onPreviousEvent}
+            className="inline-flex items-center rounded-2xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Icon name="ChevronLeft" className="mr-1 h-4 w-4" /> Previous
+          </button>
+          <button
+            type="button"
+            onClick={handleNextDance}
+            disabled={!nextDanceId && !onNextEvent}
+            className="inline-flex items-center rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next <Icon name="ChevronRight" className="ml-1 h-4 w-4" />
+          </button>
           <button
             type="button"
             onClick={handleRefresh}
@@ -530,14 +568,6 @@ export default function ScoringPage({
             </div>
             
             <div className="flex items-center space-x-4">
-              {isFinalized(judge.id) && nextDanceId && (
-                <button
-                  onClick={handleNextDance}
-                  className="inline-flex items-center px-6 py-2.5 border border-violet-200 text-sm font-bold rounded-full text-violet-700 bg-violet-50 hover:bg-violet-100 shadow-sm transition-all"
-                >
-                  Next Dance <Icon name="ChevronRight" className="ml-2 h-4 w-4" />
-                </button>
-              )}
               {!isFinalized(judge.id) && allTeamsMarked && (
                 <button
                   onClick={handleFinalize}
@@ -568,7 +598,7 @@ export default function ScoringPage({
                       </div>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {scoringTeams.map((team, index) => {
+                      {sortedScoringTeams.map((team, index) => {
                         const selected = localScores[team.id] === 1;
                         const disabled = isFinalized(judge.id) || (!selected && selectedCount >= activeRound.selectionCount);
                         return (
@@ -589,7 +619,7 @@ export default function ScoringPage({
                   </div>
                 ) : judgingFormat === 'Original' ? (
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    {scoringTeams.map((team) => {
+                    {sortedScoringTeams.map((team) => {
                       const currentScore = localScores[team.id] || null;
                       const isJudgeFinalized = isFinalized(judge.id);
 
@@ -662,7 +692,7 @@ export default function ScoringPage({
                         Step 1: Select a Team
                       </h4>
                       <div className="flex flex-wrap gap-4">
-                        {scoringTeams.map(team => {
+                        {sortedScoringTeams.map(team => {
                           const isRanked = localScores[team.id] !== null && localScores[team.id] !== undefined;
                           const isSelected = selectedTeamId === team.id;
                           const isJudgeFinalized = isFinalized(judge.id);

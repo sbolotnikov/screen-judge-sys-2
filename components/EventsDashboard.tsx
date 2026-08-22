@@ -168,6 +168,20 @@ export default function EventsDashboard({ id }: { id?: string }) {
 
   // Derive teams, dances, and judges directly from events array and eventID
   const selectedEvent = events.find((e) => e.id === eventID);
+  const judgeEvents = user?.role === 'Judge'
+    ? events.filter((event) =>
+        event.judgingFormat === 'MultipleFinals'
+          ? event.multipleFinals?.some(final => final.judgeIds.includes(user.id))
+          : event.judges.some(judge => judge.id === user.id) ||
+            event.rounds?.some(round => round.judgeIds.includes(user.id)))
+    : [];
+  const selectedJudgeEventIndex = judgeEvents.findIndex(event => event.id === eventID);
+  const previousJudgeEventId = selectedJudgeEventIndex > 0
+    ? judgeEvents[selectedJudgeEventIndex - 1].id
+    : null;
+  const nextJudgeEventId = selectedJudgeEventIndex >= 0 && selectedJudgeEventIndex < judgeEvents.length - 1
+    ? judgeEvents[selectedJudgeEventIndex + 1].id
+    : null;
   const teams: Team[] = selectedEvent?.teams || [];
   const dances: Dance[] = selectedEvent?.dances || [];
   const judges: Judge[] = selectedEvent?.judges || [];
@@ -330,13 +344,7 @@ export default function EventsDashboard({ id }: { id?: string }) {
       <div className="grid grid-cols-1 gap-3">
         {session && (session.user as SessionUser).role === 'Judge' ? (
            eventID == null ? 
-          (events
-            .filter((event) =>
-              event.judgingFormat === 'MultipleFinals'
-                ? event.multipleFinals?.some(final => final.judgeIds.includes(user?.id || ''))
-                : event.judges.some((judge) => judge.id === user?.id) ||
-                  event.rounds?.some(round => round.judgeIds.includes(user?.id || '')),
-            )
+          (judgeEvents
             .map((event) => {
               return (
                 <button
@@ -546,17 +554,23 @@ export default function EventsDashboard({ id }: { id?: string }) {
       {eventID && user?.role === 'Judge' && (
         <div className="mt-1 w-full">
           {selectedEvent?.judgingFormat === 'MultipleFinals' ? <MultipleFinalsScoring
+            key={eventID}
             partyId={id!}
             eventId={eventID}
+            eventName={eventName}
             judgeId={user.id}
             teams={teams}
             dances={dances}
             finals={selectedEvent.multipleFinals || []}
             scores={selectedEvent.multipleFinalScores || {}}
             finalized={selectedEvent.multipleFinalFinalized || {}}
+            onPreviousEvent={previousJudgeEventId ? () => setEventID(previousJudgeEventId) : undefined}
+            onNextEvent={nextJudgeEventId ? () => setEventID(nextJudgeEventId) : undefined}
           /> : <ScoringPage
+            key={eventID}
             partyID={id!}
             id={eventID}
+            eventName={eventName}
             scores={scores}
             teams={teams}
             dances={dances}
@@ -569,6 +583,8 @@ export default function EventsDashboard({ id }: { id?: string }) {
             activeRoundId={selectedEvent?.activeRoundId}
             roundScores={selectedEvent?.roundScores}
             roundFinalized={selectedEvent?.roundFinalized}
+            onPreviousEvent={previousJudgeEventId ? () => setEventID(previousJudgeEventId) : undefined}
+            onNextEvent={nextJudgeEventId ? () => setEventID(nextJudgeEventId) : undefined}
           />}
         </div>
       )}

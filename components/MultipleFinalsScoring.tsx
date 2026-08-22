@@ -21,15 +21,18 @@ const assignOnlyRemainingRank = (ballots: Ballots, finals: MultipleFinal[]): Bal
   return next;
 };
 
-export default function MultipleFinalsScoring({ partyId, eventId, judgeId, teams, dances, finals, scores, finalized }: {
+export default function MultipleFinalsScoring({ partyId, eventId, eventName, judgeId, teams, dances, finals, scores, finalized, onPreviousEvent, onNextEvent }: {
   partyId: string;
   eventId: string;
+  eventName: string;
   judgeId: string;
   teams: Team[];
   dances: Dance[];
   finals: MultipleFinal[];
   scores: NonNullable<EventData['multipleFinalScores']>;
   finalized: NonNullable<EventData['multipleFinalFinalized']>;
+  onPreviousEvent?: () => void;
+  onNextEvent?: () => void;
 }) {
   const { refreshPartyData } = usePartySettings();
   const assignedFinals = useMemo(() => finals.filter(final => final.judgeIds.includes(judgeId)), [finals, judgeId]);
@@ -137,9 +140,26 @@ export default function MultipleFinalsScoring({ partyId, eventId, judgeId, teams
   const allSubmitted = assignedDances.every(dance => assignedFinals
     .filter(final => final.danceIds.includes(dance.id))
     .every(final => finalized[final.id]?.[dance.id]?.[judgeId]));
+  const activeDanceIndex = assignedDances.findIndex(dance => dance.id === activeDanceId);
+  const previousDance = activeDanceIndex > 0 ? assignedDances[activeDanceIndex - 1] : undefined;
+  const nextDance = activeDanceIndex >= 0 && activeDanceIndex < assignedDances.length - 1
+    ? assignedDances[activeDanceIndex + 1]
+    : undefined;
+  const navigateToDance = (danceId?: string) => {
+    if (!danceId) return;
+    setActiveDanceId(danceId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const navigatePrevious = () => previousDance ? navigateToDance(previousDance.id) : onPreviousEvent?.();
+  const navigateNext = () => nextDance ? navigateToDance(nextDance.id) : onNextEvent?.();
+  const sortedTeamIds = (teamIds: string[]) => [...teamIds].sort((a, b) => {
+    const aName = teams.find(team => team.id === a)?.name || a;
+    const bName = teams.find(team => team.id === b)?.name || b;
+    return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base' });
+  });
 
   return <div className="space-y-6 pb-10">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-bold">Multiple Finals Ballot</h1><p className="text-stone-500">Give every couple one unique placement in each dance.</p></div><button onClick={() => refreshPartyData()} className="rounded-full border bg-white px-4 py-2 font-bold">Refresh</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-bold">{eventName || 'Event'}</h1><p className="font-bold text-violet-600">Multiple Finals Ballot</p><p className="text-stone-500">Give every couple one unique placement in each dance.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={!previousDance && !onPreviousEvent} onClick={navigatePrevious} className="rounded-full border bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-40">Previous</button><button type="button" disabled={!nextDance && !onNextEvent} onClick={navigateNext} className="rounded-full border border-violet-200 bg-violet-50 px-4 py-2 font-bold text-violet-700 disabled:cursor-not-allowed disabled:opacity-40">Next</button><button onClick={() => refreshPartyData()} className="rounded-full border bg-white px-4 py-2 font-bold">Refresh</button></div></div>
     <div className="flex flex-wrap gap-2">{assignedDances.map((dance, index) => {
       const done = assignedFinals.filter(final => final.danceIds.includes(dance.id)).every(final => finalized[final.id]?.[dance.id]?.[judgeId]);
       return <span key={dance.id} className={`rounded-full px-3 py-1 text-sm font-bold ${dance.id === activeDanceId ? 'bg-violet-600 text-white' : done ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>{index + 1}. {dance.name} {done ? '✓' : ''}</span>;
@@ -148,7 +168,7 @@ export default function MultipleFinalsScoring({ partyId, eventId, judgeId, teams
       <h2 className="mb-5 text-2xl font-bold text-violet-800">{activeDance.name || activeDance.id}</h2>
       <div className="space-y-7">{activeFinals.map(final => {
         const done = finalized[final.id]?.[activeDance.id]?.[judgeId];
-        return <div key={final.id} className="rounded-2xl bg-stone-50 p-4"><div className="mb-3 flex justify-between"><h3 className="font-bold">{final.name}</h3><span className={`text-sm font-bold ${done ? 'text-green-600' : 'text-amber-600'}`}>{done ? 'Submitted' : ballotComplete(final, activeDance.id) ? 'Ready' : 'Incomplete'}</span></div><div className="divide-y rounded-xl border bg-white">{final.teamIds.map(teamId => {
+        return <div key={final.id} className="rounded-2xl bg-stone-50 p-4"><div className="mb-3 flex justify-between"><h3 className="font-bold">{final.name}</h3><span className={`text-sm font-bold ${done ? 'text-green-600' : 'text-amber-600'}`}>{done ? 'Submitted' : ballotComplete(final, activeDance.id) ? 'Ready' : 'Incomplete'}</span></div><div className="divide-y rounded-xl border bg-white">{sortedTeamIds(final.teamIds).map(teamId => {
           const selected = ballots[final.id]?.[activeDance.id]?.[teamId];
           return <label key={teamId} className="flex items-center gap-4 p-3"><select disabled={done} value={selected ?? ''} onChange={event => setRank(final.id, activeDance.id, teamId, event.target.value)} className="w-24 rounded-lg border p-2"><option value="">Place</option>{final.teamIds.map((_, index) => { const rank = index + 1; return <option key={rank} value={rank}>{rank}</option>; })}</select><span className="font-bold">{teams.find(team => team.id === teamId)?.name || teamId}</span></label>;
         })}</div></div>;

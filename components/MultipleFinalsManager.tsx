@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { EventData, MultipleFinal, Placement, Rankings, Team, Dance, Judge } from '@/types/types';
 import usePartySettings from '@/hooks/usePartySettings';
 import { calculateDancePlacements, calculateFinalResults } from '@/services/skatingSystem';
@@ -17,14 +18,33 @@ type Props = {
 
 export default function MultipleFinalsManager({ eventId, eventName, teams, dances, judges, finals, scores, finalized }: Props) {
   const { updateEvent } = usePartySettings();
-  const saveFinals = (next: MultipleFinal[]) => updateEvent(eventId, { multipleFinals: next });
+  const removeDuplicateCoupleAssignments = (items: MultipleFinal[]) => {
+    const assigned = new Set<string>();
+    return items.map(final => ({
+      ...final,
+      teamIds: final.teamIds.filter(teamId => {
+        if (assigned.has(teamId)) return false;
+        assigned.add(teamId);
+        return true;
+      }),
+    }));
+  };
+  const saveFinals = (next: MultipleFinal[]) =>
+    updateEvent(eventId, { multipleFinals: removeDuplicateCoupleAssignments(next) });
   const updateFinal = (finalId: string, patch: Partial<MultipleFinal>) =>
     saveFinals(finals.map(final => final.id === finalId ? { ...final, ...patch } : final));
+
+  useEffect(() => {
+    const normalized = removeDuplicateCoupleAssignments(finals);
+    const hasOverlaps = normalized.some((final, index) =>
+      final.teamIds.length !== finals[index].teamIds.length);
+    if (hasOverlaps) updateEvent(eventId, { multipleFinals: normalized });
+  }, [eventId, finals, updateEvent]);
 
   const addFinal = () => saveFinals([...finals, {
     id: crypto.randomUUID(),
     name: `Final ${finals.length + 1}`,
-    teamIds: teams.map(team => team.id),
+    teamIds: [],
     danceIds: dances.map(dance => dance.id),
     judgeIds: judges.map(judge => judge.id),
     resultsFinalized: false,
@@ -102,7 +122,7 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
   return (
     <section className="space-y-5 rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-2xl font-bold">Finals inside this event</h2><p className="text-sm text-stone-500">Dances and judges default to all; uncheck exceptions per final.</p></div>
+        <div><h2 className="text-2xl font-bold">Finals inside this event</h2><p className="text-sm text-stone-500">Each couple can participate in only one final. Dances and judges default to all.</p></div>
         <div className="flex gap-2">
           {finals.some(final => final.resultsFinalized) && <button onClick={exportPdf} className="rounded-full bg-green-600 px-4 py-2 font-bold text-white">Export finalized PDF</button>}
           <button onClick={addFinal} className="rounded-full bg-violet-600 px-4 py-2 font-bold text-white">Add Final</button>
@@ -111,13 +131,16 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
 
       {finals.map(final => {
         const calculated = final.resultsFinalized ? resultsFor(final) : null;
+        const couplesInOtherFinals = new Set(finals
+          .filter(item => item.id !== final.id)
+          .flatMap(item => item.teamIds));
         return <article key={final.id} className="space-y-4 rounded-2xl border border-stone-200 p-5">
           <div className="flex gap-3">
             <input value={final.name} onChange={event => updateFinal(final.id, { name: event.target.value, resultsFinalized: false })} className="min-w-0 flex-1 rounded-xl border p-2 text-lg font-bold" />
             <button onClick={() => saveFinals(finals.filter(item => item.id !== final.id))} className="rounded-full border border-red-200 px-3 text-red-600">Delete</button>
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
-            <ChoiceList title="Couples" items={teams} selected={final.teamIds} onToggle={id => updateFinal(final.id, { teamIds: toggleId(final.teamIds, id), resultsFinalized: false })} />
+            <ChoiceList title="Couples" items={teams} selected={final.teamIds} disabledIds={couplesInOtherFinals} disabledText="Assigned to another final" onToggle={id => updateFinal(final.id, { teamIds: toggleId(final.teamIds, id), resultsFinalized: false })} />
             <ChoiceList title="Dances" items={dances} selected={final.danceIds} onToggle={id => updateFinal(final.id, { danceIds: toggleId(final.danceIds, id), resultsFinalized: false })} />
             <ChoiceList title="Judges" items={judges} selected={final.judgeIds} onToggle={id => updateFinal(final.id, { judgeIds: toggleId(final.judgeIds, id), resultsFinalized: false })} />
           </div>
@@ -137,8 +160,11 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
   );
 }
 
-function ChoiceList({ title, items, selected, onToggle }: { title: string; items: Array<{ id: string; name: string }>; selected: string[]; onToggle: (id: string) => void }) {
-  return <fieldset className="rounded-xl bg-stone-50 p-3"><legend className="font-bold">{title}</legend><div className="mt-2 space-y-2">{items.map(item => <label key={item.id} className="flex gap-2 text-sm"><input type="checkbox" checked={selected.includes(item.id)} onChange={() => onToggle(item.id)} />{item.name || item.id}</label>)}</div></fieldset>;
+function ChoiceList({ title, items, selected, disabledIds = new Set<string>(), disabledText, onToggle }: { title: string; items: Array<{ id: string; name: string }>; selected: string[]; disabledIds?: Set<string>; disabledText?: string; onToggle: (id: string) => void }) {
+  return <fieldset className="rounded-xl bg-stone-50 p-3"><legend className="font-bold">{title}</legend><div className="mt-2 space-y-2">{items.map(item => {
+    const disabled = disabledIds.has(item.id) && !selected.includes(item.id);
+    return <label key={item.id} className={`flex gap-2 text-sm ${disabled ? 'cursor-not-allowed text-stone-400' : ''}`} title={disabled ? disabledText : undefined}><input type="checkbox" checked={selected.includes(item.id)} disabled={disabled} onChange={() => onToggle(item.id)} />{item.name || item.id}{disabled && disabledText ? <span className="ml-auto text-xs">{disabledText}</span> : null}</label>;
+  })}</div></fieldset>;
 }
 
 function FinalTables({ final, teams, dances, judges, scores, danceResults, finalResults }: { final: MultipleFinal; teams: Team[]; dances: Dance[]; judges: Judge[]; scores: NonNullable<EventData['multipleFinalScores']>; danceResults: Record<string, Placement[]>; finalResults: ReturnType<typeof calculateFinalResults> }) {

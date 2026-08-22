@@ -55,6 +55,13 @@ export default function SettingsDashboard({
   const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
   const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
   const [loadingJudges, setLoadingJudges] = useState(false);
+  const [selectedJudgeIds, setSelectedJudgeIds] = useState<string[]>([]);
+  const [isBulkDanceModalOpen, setIsBulkDanceModalOpen] = useState(false);
+  const [bulkDanceNames, setBulkDanceNames] = useState('');
+  const [isAddingBulkDances, setIsAddingBulkDances] = useState(false);
+  const [isBulkTeamModalOpen, setIsBulkTeamModalOpen] = useState(false);
+  const [bulkTeamNames, setBulkTeamNames] = useState('');
+  const [isAddingBulkTeams, setIsAddingBulkTeams] = useState(false);
   const { updateEventField, setCompID, updateEvent } = usePartySettings();
    const [isTeamsOpen, setIsTeamsOpen] = useState(false);
   const [isDancesOpen, setIsDancesOpen] = useState(false);
@@ -333,12 +340,20 @@ export default function SettingsDashboard({
     }
   };
 
-  const selectJudge = (judge: Judge) => {
-    if (judges.some((j) => j.id === judge.id)) {
-      alert('This judge is already added.');
-      return;
-    }
-    handleChange([...judges, judge], 'judges');
+  const toggleJudgeSelection = (judgeId: string) => {
+    if (judges.some(judge => judge.id === judgeId)) return;
+    setSelectedJudgeIds(current => current.includes(judgeId)
+      ? current.filter(id => id !== judgeId)
+      : [...current, judgeId]);
+  };
+
+  const addSelectedJudges = async () => {
+    const existingIds = new Set(judges.map(judge => judge.id));
+    const selected = availableJudges.filter(judge =>
+      selectedJudgeIds.includes(judge.id) && !existingIds.has(judge.id));
+    if (!selected.length) return;
+    await handleChange([...judges, ...selected], 'judges');
+    setSelectedJudgeIds([]);
     setIsJudgeModalOpen(false);
   };
 
@@ -368,6 +383,35 @@ export default function SettingsDashboard({
     handleChange([...teams, newTeam], 'teams');
   };
 
+  const addBulkTeams = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const existingNames = new Set(teams.map(team => team.name.trim().toLocaleLowerCase()));
+    const uniqueNames = [...new Map(bulkTeamNames
+      .split(',')
+      .map(teamName => teamName.trim())
+      .filter(Boolean)
+      .map(teamName => [teamName.toLocaleLowerCase(), teamName])).values()]
+      .filter(teamName => !existingNames.has(teamName.toLocaleLowerCase()));
+    if (!uniqueNames.length) return;
+
+    setIsAddingBulkTeams(true);
+    try {
+      await handleChange([
+        ...teams,
+        ...uniqueNames.map(teamName => ({
+          id: crypto.randomUUID(),
+          name: teamName,
+          color: '#8b5cf6',
+          logo: '',
+        })),
+      ], 'teams');
+      setBulkTeamNames('');
+      setIsBulkTeamModalOpen(false);
+    } finally {
+      setIsAddingBulkTeams(false);
+    }
+  };
+
   const updateTeam = (index: number, field: keyof Team, val: string) => {
     const newTeams = [...teams];
     newTeams[index] = { ...newTeams[index], [field]: val };
@@ -384,6 +428,30 @@ export default function SettingsDashboard({
     handleChange([...dances, newDance], 'dances');
   };
 
+  const addBulkDances = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const existingNames = new Set(dances.map(dance => dance.name.trim().toLocaleLowerCase()));
+    const uniqueNames = [...new Map(bulkDanceNames
+      .split(',')
+      .map(danceName => danceName.trim())
+      .filter(Boolean)
+      .map(danceName => [danceName.toLocaleLowerCase(), danceName])).values()]
+      .filter(danceName => !existingNames.has(danceName.toLocaleLowerCase()));
+    if (!uniqueNames.length) return;
+
+    setIsAddingBulkDances(true);
+    try {
+      await handleChange([
+        ...dances,
+        ...uniqueNames.map(danceName => ({ id: crypto.randomUUID(), name: danceName })),
+      ], 'dances');
+      setBulkDanceNames('');
+      setIsBulkDanceModalOpen(false);
+    } finally {
+      setIsAddingBulkDances(false);
+    }
+  };
+
   const updateDance = (index: number, field: keyof Dance, val: string) => {
     const newDances = [...dances];
     newDances[index] = { ...newDances[index], [field]: val };
@@ -396,6 +464,7 @@ export default function SettingsDashboard({
   };
 
   const addJudge = () => {
+    setSelectedJudgeIds([]);
     fetchJudges();
     setIsJudgeModalOpen(true);
   };
@@ -467,6 +536,12 @@ export default function SettingsDashboard({
             <h2 className="text-2xl font-bold text-stone-900 text-center">Teams: {teams.length}</h2>
           </div>
           {isTeamsOpen ?(<div className="space-x-2">
+            <button
+            onClick={() => setIsBulkTeamModalOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-violet-200 text-sm font-medium rounded-full text-violet-700 bg-violet-50 hover:bg-violet-100 shadow-sm transition-colors"
+          >
+            <Icon name="Plus" className="mr-2 h-4 w-4" /> Add Multiple
+          </button>
             <button
             onClick={addTeam}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
@@ -553,6 +628,12 @@ export default function SettingsDashboard({
           </div>
 
           {isDancesOpen ?(<div className="space-x-2">
+             <button
+            onClick={() => setIsBulkDanceModalOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-violet-200 text-sm font-medium rounded-full text-violet-700 bg-violet-50 hover:bg-violet-100 shadow-sm transition-colors"
+          >
+            <Icon name="Plus" className="mr-2 h-4 w-4" /> Add Multiple
+          </button>
              <button
             onClick={addDance}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-violet-600 hover:bg-violet-700 shadow-sm transition-colors"
@@ -840,13 +921,119 @@ export default function SettingsDashboard({
       </div>
 </>}
 
+      {isBulkTeamModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-bold text-stone-900">Add Multiple Teams</h3>
+                <p className="mt-1 text-sm text-stone-500">Add several teams to {name || 'this event'}.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBulkTeamModalOpen(false)}
+                className="rounded-full bg-stone-100 p-2 text-stone-400 hover:bg-stone-200 hover:text-stone-600"
+                aria-label="Close"
+              >
+                <Icon name="X" className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={addBulkTeams}>
+              <label htmlFor="eventBulkTeamNames" className="mb-2 block text-sm font-semibold text-stone-700">
+                Team names separated by commas
+              </label>
+              <input
+                id="eventBulkTeamNames"
+                type="text"
+                autoFocus
+                value={bulkTeamNames}
+                onChange={event => setBulkTeamNames(event.target.value)}
+                placeholder="Team One, Team Two, Team Three"
+                className="w-full rounded-xl border border-stone-300 p-3 text-lg shadow-sm focus:border-violet-500 focus:ring-violet-500"
+                required
+              />
+              <p className="mt-2 text-xs text-stone-500">Duplicate names already in this event are skipped.</p>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkTeamModalOpen(false)}
+                  className="rounded-full border border-stone-200 px-5 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!bulkTeamNames.split(',').some(teamName => teamName.trim()) || isAddingBulkTeams}
+                  className="rounded-full bg-violet-600 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isAddingBulkTeams ? 'Adding…' : 'Add Teams'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isBulkDanceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-bold text-stone-900">Add Multiple Dances</h3>
+                <p className="mt-1 text-sm text-stone-500">Add several dances to {name || 'this event'}.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBulkDanceModalOpen(false)}
+                className="rounded-full bg-stone-100 p-2 text-stone-400 hover:bg-stone-200 hover:text-stone-600"
+                aria-label="Close"
+              >
+                <Icon name="X" className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={addBulkDances}>
+              <label htmlFor="eventBulkDanceNames" className="mb-2 block text-sm font-semibold text-stone-700">
+                Dance names separated by commas
+              </label>
+              <input
+                id="eventBulkDanceNames"
+                type="text"
+                autoFocus
+                value={bulkDanceNames}
+                onChange={event => setBulkDanceNames(event.target.value)}
+                placeholder="Waltz, Tango, Foxtrot, Quickstep"
+                className="w-full rounded-xl border border-stone-300 p-3 text-lg shadow-sm focus:border-violet-500 focus:ring-violet-500"
+                required
+              />
+              <p className="mt-2 text-xs text-stone-500">Duplicate names already in this event are skipped.</p>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDanceModalOpen(false)}
+                  className="rounded-full border border-stone-200 px-5 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!bulkDanceNames.split(',').some(danceName => danceName.trim()) || isAddingBulkDances}
+                  className="rounded-full bg-violet-600 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isAddingBulkDances ? 'Adding…' : 'Add Dances'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Judge Selection Modal */}
       {isJudgeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 transform transition-all max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-bold text-stone-900">
-                Select a Judge
+                Select Judges
               </h3>
               <button
                 onClick={() => setIsJudgeModalOpen(false)}
@@ -865,12 +1052,27 @@ export default function SettingsDashboard({
                 <p className="text-center py-10 text-stone-500">{`No users with 'Judge' role found.`}</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {availableJudges.map((judge) => (
-                    <button
+                  {availableJudges.map((judge) => {
+                    const alreadyAdded = judges.some(item => item.id === judge.id);
+                    const selected = selectedJudgeIds.includes(judge.id);
+                    return (
+                    <label
                       key={judge.id}
-                      onClick={() => selectJudge(judge)}
-                      className="flex items-center space-x-4 p-4 border border-stone-200 rounded-2xl hover:border-violet-300 hover:bg-violet-50 transition-all text-left"
+                      className={`flex items-center space-x-4 rounded-2xl border p-4 text-left transition-all ${
+                        alreadyAdded
+                          ? 'cursor-not-allowed border-stone-100 bg-stone-50 opacity-60'
+                          : selected
+                            ? 'cursor-pointer border-violet-500 bg-violet-50 ring-2 ring-violet-100'
+                            : 'cursor-pointer border-stone-200 hover:border-violet-300 hover:bg-violet-50'
+                      }`}
                     >
+                      <input
+                        type="checkbox"
+                        checked={alreadyAdded || selected}
+                        disabled={alreadyAdded}
+                        onChange={() => toggleJudgeSelection(judge.id)}
+                        className="h-5 w-5 shrink-0 accent-violet-600"
+                      />
                       <div className="h-12 w-12 rounded-full overflow-hidden bg-stone-100 shrink-0">
                         {judge.image ? (
                           <Image
@@ -892,22 +1094,37 @@ export default function SettingsDashboard({
                           {judge.name}
                         </p>
                         <p className="text-xs text-stone-500 truncate">
-                          ID: {judge.id}
+                          {alreadyAdded ? 'Already added' : `ID: ${judge.id}`}
                         </p>
                       </div>
-                    </button>
-                  ))}
+                    </label>
+                  )})}
                 </div>
               )}
             </div>
 
-            <div className="mt-8 flex justify-end">
+            <div className="mt-8 flex items-center justify-between gap-3">
+              <span className="text-sm text-stone-500">
+                {selectedJudgeIds.length} selected
+              </span>
+              <div className="flex gap-3">
               <button
-                onClick={() => setIsJudgeModalOpen(false)}
+                onClick={() => {
+                  setSelectedJudgeIds([]);
+                  setIsJudgeModalOpen(false);
+                }}
                 className="px-6 py-2.5 border border-stone-200 rounded-full text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
               >
                 Cancel
               </button>
+              <button
+                onClick={addSelectedJudges}
+                disabled={selectedJudgeIds.length === 0}
+                className="rounded-full bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Add {selectedJudgeIds.length || ''} Judge{selectedJudgeIds.length === 1 ? '' : 's'}
+              </button>
+              </div>
             </div>
           </div>
         </div>
