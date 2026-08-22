@@ -99,7 +99,9 @@ function addMultipleFinals(doc: PdfDocument, autoTable: AutoTable, event: EventD
     if (index) { doc.setFontSize(21); doc.text(event.name || 'Unnamed Event', 14, 18); }
     doc.setFontSize(15); doc.text(final.name, 14, index ? 27 : 34);
     const teams = event.teams.filter(team => final.teamIds.includes(team.id));
-    addSkatingSummary(doc, autoTable, event, teams, final.danceIds, final.judgeIds, event.multipleFinalScores?.[final.id] || {}, index ? 33 : 40);
+    const finalScores = event.multipleFinalScores?.[final.id] || {};
+    const calculated = addSkatingSummary(doc, autoTable, event, teams, final.danceIds, final.judgeIds, finalScores, index ? 33 : 40);
+    addMultipleFinalBreakdowns(doc, autoTable, event, final.name, teams, final.danceIds, final.judgeIds, finalScores, calculated.danceResults, calculated.results);
   });
 }
 
@@ -124,6 +126,99 @@ function addSkatingSummary(doc: PdfDocument, autoTable: AutoTable, event: EventD
     body: results.map(result => [result.finalRank, teams.find(team => team.id === result.coupleId)?.name || result.coupleId, ...danceIds.map(id => result.dancePlacements[id] ?? '-'), result.totalScore]),
     theme: 'grid', headStyles: { fillColor: [139, 92, 246] },
   });
+  return { danceResults, results };
+}
+
+function addMultipleFinalBreakdowns(
+  doc: PdfDocument,
+  autoTable: AutoTable,
+  event: EventData,
+  finalName: string,
+  teams: EventData['teams'],
+  danceIds: string[],
+  judgeIds: string[],
+  scores: EventData['scores'],
+  danceResults: Record<string, Placement[]>,
+  results: ReturnType<typeof calculateFinalResults>,
+) {
+  danceIds.forEach(danceId => {
+    doc.addPage();
+    doc.setFontSize(16);
+    doc.text(`${event.name || 'Event'} - ${finalName} - Dance Tabulation: ${event.dances.find(dance => dance.id === danceId)?.name || danceId}`, 14, 18);
+    autoTable(doc, {
+      startY: 24,
+      head: [['Couple', ...judgeIds.map((_, index) => `J${index + 1}`), ...teams.map((_, index) => `1-${index + 1}`), 'Place']],
+      body: [...(danceResults[danceId] || [])].sort((a, b) => a.rank - b.rank).map(placement => {
+        const marks = judgeIds.map(judgeId => scores[danceId]?.[judgeId]?.[placement.coupleId]);
+        const numericMarks = marks.filter((mark): mark is number => typeof mark === 'number');
+        return [
+          teams.find(team => team.id === placement.coupleId)?.name || placement.coupleId,
+          ...marks.map(mark => mark ?? '-'),
+          ...teams.map((_, index) => {
+            const column = index + 1;
+            const included = numericMarks.filter(mark => mark <= column);
+            return `${included.length} (${included.reduce((sum, mark) => sum + mark, 0)})`;
+          }),
+          placement.rank,
+        ];
+      }),
+      theme: 'grid', styles: { fontSize: 7 },
+    });
+  });
+
+  const needsRule10 = danceIds.length > 1 && results.some((result, index, all) =>
+    all.some((other, otherIndex) => otherIndex !== index && other.totalScore === result.totalScore));
+  if (needsRule10) {
+    doc.addPage();
+    doc.setFontSize(16);
+    doc.text(`${event.name || 'Event'} - ${finalName} - Rule 10: Better Dance Majority`, 14, 18);
+    autoTable(doc, {
+      startY: 24,
+      head: [['Couple', ...danceIds.map(id => event.dances.find(dance => dance.id === id)?.name || id), ...teams.map((_, index) => `1-${index + 1}`), 'Sum']],
+      body: [...results].sort((a, b) => a.totalScore - b.totalScore || a.finalRank - b.finalRank).map(result => {
+        const dancePlaces = danceIds.map(id => result.dancePlacements[id]);
+        return [
+          teams.find(team => team.id === result.coupleId)?.name || result.coupleId,
+          ...dancePlaces,
+          ...teams.map((_, index) => {
+            const column = index + 1;
+            const included = dancePlaces.filter(place => place <= column);
+            return `${included.length} (${included.reduce((sum, place) => sum + place, 0)})`;
+          }),
+          result.totalScore,
+        ];
+      }),
+      theme: 'grid', styles: { fontSize: 7 }, headStyles: { fillColor: [5, 150, 105] },
+    });
+  }
+
+  const rule11Results = results.filter(result => result.rule11Contested);
+  if (danceIds.length > 1 && rule11Results.length) {
+    doc.addPage();
+    doc.setFontSize(16);
+    doc.text(`${event.name || 'Event'} - ${finalName} - Rule 11: Grand Tabulation`, 14, 18);
+    autoTable(doc, {
+      startY: 24,
+      head: [['Couple', ...danceIds.flatMap((_, danceIndex) => judgeIds.map((__, judgeIndex) => `D${danceIndex + 1}-J${judgeIndex + 1}`)), ...teams.map((_, index) => `1-${index + 1}`), 'Result']],
+      body: rule11Results.map(result => {
+        const allMarks = danceIds.flatMap(danceId => judgeIds.map(judgeId => {
+          const mark = scores[danceId]?.[judgeId]?.[result.coupleId];
+          return typeof mark === 'number' ? mark : teams.length + 1;
+        }));
+        return [
+          teams.find(team => team.id === result.coupleId)?.name || result.coupleId,
+          ...allMarks,
+          ...teams.map((_, index) => {
+            const column = index + 1;
+            const included = allMarks.filter(mark => mark <= column);
+            return `${included.length} (${included.reduce((sum, mark) => sum + mark, 0)})`;
+          }),
+          result.finalRank,
+        ];
+      }),
+      theme: 'grid', styles: { fontSize: 6 }, headStyles: { fillColor: [124, 58, 237] },
+    });
+  }
 }
 
 function addEmptyMessage(doc: PdfDocument, message: string, y = 34) {

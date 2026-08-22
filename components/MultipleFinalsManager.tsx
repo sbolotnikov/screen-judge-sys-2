@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { EventData, MultipleFinal, Placement, Rankings, Team, Dance, Judge } from '@/types/types';
 import usePartySettings from '@/hooks/usePartySettings';
 import { calculateDancePlacements, calculateFinalResults } from '@/services/skatingSystem';
+import SkatingBreakdown from './SkatingBreakdown';
 
 type Props = {
   eventId: string;
@@ -101,18 +102,89 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
       final.danceIds.forEach(danceId => {
         doc.addPage();
         doc.setFontSize(16);
-        doc.text(`${final.name} - ${dances.find(dance => dance.id === danceId)?.name || danceId}`, 14, 18);
+        doc.text(`${final.name} - Dance Tabulation: ${dances.find(dance => dance.id === danceId)?.name || danceId}`, 14, 18);
+        const placements = calculated.danceResults[danceId] || [];
         autoTable(doc, {
           startY: 24,
-          head: [['Couple', ...final.judgeIds.map((id, index) => `J${index + 1} - ${judges.find(judge => judge.id === id)?.name || id}`), 'Place']],
-          body: calculated.finalTeams.map(team => [
-            team.name || team.id,
-            ...final.judgeIds.map(judgeId => scores[final.id]?.[danceId]?.[judgeId]?.[team.id] ?? '-'),
-            calculated.danceResults[danceId]?.find(result => result.coupleId === team.id)?.rank ?? '-',
-          ]),
+          head: [['Couple', ...final.judgeIds.map((_, index) => `J${index + 1}`), ...calculated.finalTeams.map((_, index) => `1-${index + 1}`), 'Place']],
+          body: [...placements].sort((a, b) => a.rank - b.rank).map(placement => {
+            const marks = final.judgeIds.map(judgeId => scores[final.id]?.[danceId]?.[judgeId]?.[placement.coupleId]);
+            const numericMarks = marks.filter((mark): mark is number => typeof mark === 'number');
+            return [
+              calculated.finalTeams.find(team => team.id === placement.coupleId)?.name || placement.coupleId,
+              ...marks.map(mark => mark ?? '-'),
+              ...calculated.finalTeams.map((_, index) => {
+                const column = index + 1;
+                const included = numericMarks.filter(mark => mark <= column);
+                return `${included.length} (${included.reduce((sum, mark) => sum + mark, 0)})`;
+              }),
+              placement.rank,
+            ];
+          }),
           theme: 'grid',
+          styles: { fontSize: 7 },
         });
       });
+
+      if (final.danceIds.length > 1) {
+        const needsRule10 = calculated.finalResults.some((result, index, all) =>
+          all.some((other, otherIndex) => otherIndex !== index && other.totalScore === result.totalScore));
+        if (needsRule10) {
+          doc.addPage();
+          doc.setFontSize(16);
+          doc.text(`${final.name} - Rule 10: Better Dance Majority`, 14, 18);
+          autoTable(doc, {
+            startY: 24,
+            head: [['Couple', ...final.danceIds.map(id => dances.find(dance => dance.id === id)?.name || id), ...calculated.finalTeams.map((_, index) => `1-${index + 1}`), 'Sum']],
+            body: [...calculated.finalResults].sort((a, b) => a.totalScore - b.totalScore || a.finalRank - b.finalRank).map(result => {
+              const dancePlaces = final.danceIds.map(id => result.dancePlacements[id]);
+              return [
+                calculated.finalTeams.find(team => team.id === result.coupleId)?.name || result.coupleId,
+                ...dancePlaces,
+                ...calculated.finalTeams.map((_, index) => {
+                  const column = index + 1;
+                  const included = dancePlaces.filter(place => place <= column);
+                  return `${included.length} (${included.reduce((sum, place) => sum + place, 0)})`;
+                }),
+                result.totalScore,
+              ];
+            }),
+            theme: 'grid',
+            styles: { fontSize: 7 },
+            headStyles: { fillColor: [5, 150, 105] },
+          });
+        }
+
+        const rule11Results = calculated.finalResults.filter(result => result.rule11Contested);
+        if (rule11Results.length) {
+          doc.addPage();
+          doc.setFontSize(16);
+          doc.text(`${final.name} - Rule 11: Grand Tabulation`, 14, 18);
+          autoTable(doc, {
+            startY: 24,
+            head: [['Couple', ...final.danceIds.flatMap((_, danceIndex) => final.judgeIds.map((__, judgeIndex) => `D${danceIndex + 1}-J${judgeIndex + 1}`)), ...calculated.finalTeams.map((_, index) => `1-${index + 1}`), 'Result']],
+            body: rule11Results.map(result => {
+              const allMarks = final.danceIds.flatMap(danceId => final.judgeIds.map(judgeId => {
+                const mark = scores[final.id]?.[danceId]?.[judgeId]?.[result.coupleId];
+                return typeof mark === 'number' ? mark : calculated.finalTeams.length + 1;
+              }));
+              return [
+                calculated.finalTeams.find(team => team.id === result.coupleId)?.name || result.coupleId,
+                ...allMarks,
+                ...calculated.finalTeams.map((_, index) => {
+                  const column = index + 1;
+                  const included = allMarks.filter(mark => mark <= column);
+                  return `${included.length} (${included.reduce((sum, mark) => sum + mark, 0)})`;
+                }),
+                result.finalRank,
+              ];
+            }),
+            theme: 'grid',
+            styles: { fontSize: 6 },
+            headStyles: { fillColor: [124, 58, 237] },
+          });
+        }
+      }
     });
     doc.save(`${eventName || 'multiple-finals'}-results.pdf`);
   };
@@ -153,7 +225,7 @@ export default function MultipleFinalsManager({ eventId, eventName, teams, dance
             })}</div>
           </div>
           {!final.resultsFinalized && <button disabled={!isFinalReady(final)} onClick={() => updateFinal(final.id, { resultsFinalized: true })} className="rounded-full bg-green-600 px-4 py-2 font-bold text-white disabled:opacity-40">Finalize calculation</button>}
-          {calculated && <FinalTables final={final} teams={calculated.finalTeams} dances={dances} judges={judges} scores={scores} danceResults={calculated.danceResults} finalResults={calculated.finalResults} />}
+          {calculated && <FinalTables final={final} teams={calculated.finalTeams} dances={dances} judges={judges} scores={scores} finalized={finalized} danceResults={calculated.danceResults} finalResults={calculated.finalResults} />}
         </article>;
       })}
     </section>
@@ -167,10 +239,22 @@ function ChoiceList({ title, items, selected, disabledIds = new Set<string>(), d
   })}</div></fieldset>;
 }
 
-function FinalTables({ final, teams, dances, judges, scores, danceResults, finalResults }: { final: MultipleFinal; teams: Team[]; dances: Dance[]; judges: Judge[]; scores: NonNullable<EventData['multipleFinalScores']>; danceResults: Record<string, Placement[]>; finalResults: ReturnType<typeof calculateFinalResults> }) {
+function FinalTables({ final, teams, dances, judges, scores, finalized, danceResults, finalResults }: { final: MultipleFinal; teams: Team[]; dances: Dance[]; judges: Judge[]; scores: NonNullable<EventData['multipleFinalScores']>; finalized: NonNullable<EventData['multipleFinalFinalized']>; danceResults: Record<string, Placement[]>; finalResults: ReturnType<typeof calculateFinalResults> }) {
   return <div className="space-y-6 overflow-x-auto">
     <h3 className="text-xl font-bold">Finalized results: {final.name}</h3>
     <table className="w-full border-collapse text-sm"><thead><tr><th className="border p-2">Place</th><th className="border p-2 text-left">Couple</th>{final.danceIds.map(id => <th key={id} className="border p-2">{dances.find(dance => dance.id === id)?.name}</th>)}<th className="border p-2">Total</th></tr></thead><tbody>{finalResults.map(result => <tr key={result.coupleId}><td className="border p-2 text-center">{result.finalRank}</td><td className="border p-2 font-bold">{teams.find(team => team.id === result.coupleId)?.name}</td>{final.danceIds.map(id => <td key={id} className="border p-2 text-center">{result.dancePlacements[id]}</td>)}<td className="border p-2 text-center font-bold">{result.totalScore}</td></tr>)}</tbody></table>
-    {final.danceIds.map(danceId => <div key={danceId}><h4 className="mb-2 font-bold">{dances.find(dance => dance.id === danceId)?.name}</h4><table className="w-full border-collapse text-sm"><thead><tr><th className="border p-2 text-left">Couple</th>{final.judgeIds.map((id, index) => <th key={id} className="border p-2">J{index + 1} - {judges.find(judge => judge.id === id)?.name}</th>)}<th className="border p-2">Place</th></tr></thead><tbody>{teams.map(team => <tr key={team.id}><td className="border p-2 font-bold">{team.name}</td>{final.judgeIds.map(id => <td key={id} className="border p-2 text-center">{scores[final.id]?.[danceId]?.[id]?.[team.id] ?? '-'}</td>)}<td className="border p-2 text-center font-bold">{danceResults[danceId]?.find(result => result.coupleId === team.id)?.rank ?? '-'}</td></tr>)}</tbody></table></div>)}
+    <SkatingBreakdown
+      name={final.name}
+      teams={teams}
+      dances={dances.filter(dance => final.danceIds.includes(dance.id))}
+      judges={judges.filter(judge => final.judgeIds.includes(judge.id))}
+      scores={scores[final.id] || {}}
+      finalized={finalized[final.id] || {}}
+      releasedDances={Object.fromEntries(final.danceIds.map(danceId => [danceId, true]))}
+      danceResults={danceResults}
+      finalResults={finalResults}
+      isAnimationOn={false}
+      selectedDanceName="Overall Standings"
+    />
   </div>;
 }

@@ -207,6 +207,8 @@ export default function SkatingBreakdown({
   };
 
   const released = dances.filter(d => releasedDances[d.id]);
+  const needsRule10 = results.some((result, index) =>
+    results.some((other, otherIndex) => otherIndex !== index && other.totalScore === result.totalScore));
 
   return (
     <div className="space-y-8 mt-12" style={fontSize2 ? { fontSize: `${fontSize2}px` } : undefined}>
@@ -305,7 +307,7 @@ export default function SkatingBreakdown({
             ))}
 
 
-            {released.length > 1 && !isAnimationOn && (
+            {released.length > 1 && needsRule10 && !isAnimationOn && (
               <>
                 <div className="flex items-center gap-4 pt-10">
                   <div className="h-px grow bg-stone-200"></div>

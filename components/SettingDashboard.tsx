@@ -281,7 +281,9 @@ export default function SettingsDashboard({
         });
 
         // 4. Multi-Dance Tie-Breakers (Rule 10 & 11)
-        if (released.length > 1) {
+        const needsRule10 = finalResults.some((result, index, all) =>
+          all.some((other, otherIndex) => otherIndex !== index && other.totalScore === result.totalScore));
+        if (released.length > 1 && needsRule10) {
           doc.addPage();
           doc.setFontSize(18);
           doc.text('Multi-Dance Resolutions (Rule 10/11)', 14, 20);
